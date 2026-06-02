@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 10,
+      "memory": 512
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" }
+  ],
+  "crons": [
+    { "path": "/api/cron/prune", "schedule": "0 3 * * *" }
+  ],
+  "buildCommand": "",
+  "outputDirectory": "public"
+}

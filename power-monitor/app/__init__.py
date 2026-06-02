@@ -1,0 +1,1 @@
+"""Power Monitor application package."""

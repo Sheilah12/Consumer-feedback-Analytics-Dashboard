@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>History — Power Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/history-index.css" />
+</head>
+<body class="history-page">
+  <button type="button" class="mobile-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-title">Power<span>Monitor</span></div>
+        <div class="sidebar__brand-sub">Historical Analysis</div>
+      </div>
+      <nav class="sidebar__nav">
+        <a href="/"><span class="sidebar__nav-icon">◉</span> Dashboard</a>
+        <a href="/history" class="active"><span class="sidebar__nav-icon">▤</span> History</a>
+        <a href="/budget"><span class="sidebar__nav-icon">$</span> Budget</a>
+        <a href="/alerts"><span class="sidebar__nav-icon">⚠</span> Alerts</a>
+        <a href="/settings"><span class="sidebar__nav-icon">⚙</span> Settings</a>
+      </nav>
+      <div class="sidebar__footer">SQLite archive · REST API</div>
+    </aside>
+
+    <main class="main-content">
+      <header class="hist-header">
+        <h1>Consumption History</h1>
+        <p>Power trends, hourly heatmap, daily totals, and raw readings export</p>
+      </header>
+
+      <div class="date-range-bar">
+        <div class="date-field">
+          <label for="date-from">From</label>
+          <input type="date" id="date-from" />
+        </div>
+        <div class="date-field">
+          <label for="date-to">To</label>
+          <input type="date" id="date-to" />
+        </div>
+        <button type="button" class="btn btn--primary" id="btn-apply-range">Apply</button>
+      </div>
+
+      <section class="hist-chart-card">
+        <div class="hist-chart-card__title">Power Over Time</div>
+        <div class="hist-chart-card__hint">Scroll or pinch to zoom · double-click to reset</div>
+        <div class="hist-chart-wrap">
+          <canvas id="chart-power"></canvas>
+        </div>
+      </section>
+
+      <section class="hist-chart-card">
+        <div class="hist-chart-card__title">Hourly Energy Heatmap</div>
+        <div class="hist-chart-card__hint">7 days × 24 hours · intensity = kWh consumed (hover for detail)</div>
+        <div class="hist-chart-wrap hist-chart-wrap--heatmap">
+          <canvas id="heatmap-canvas"></canvas>
+        </div>
+      </section>
+
+      <section class="hist-chart-card">
+        <div class="hist-chart-card__title">Daily Totals</div>
+        <div class="hist-chart-card__hint">Energy (kWh) and peak current (A) · dashed line = average daily energy</div>
+        <div class="hist-chart-wrap">
+          <canvas id="chart-daily"></canvas>
+        </div>
+      </section>
+
+      <section class="hist-table-section">
+        <div class="hist-table-toolbar">
+          <h2 style="font-size:1rem;font-weight:600">Raw Readings</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+            <button type="button" class="btn" id="btn-export-csv">Export CSV</button>
+            <div class="pagination">
+              <button type="button" id="page-prev" aria-label="Previous page">‹</button>
+              <span id="page-info">Page 1 / 1</span>
+              <button type="button" id="page-next" aria-label="Next page">›</button>
+            </div>
+          </div>
+        </div>
+        <div class="hist-table-wrap">
+          <table class="hist-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Voltage (V)</th>
+                <th>Current In (A)</th>
+                <th>Current Out (A)</th>
+                <th>Diff (mA)</th>
+                <th>Power (W)</th>
+                <th>Energy (kWh)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="readings-tbody">
+              <tr><td colspan="8">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="heatmap-tooltip" role="tooltip"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="/js/history.js?v=5"></script>
+</body>
+</html>

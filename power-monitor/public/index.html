@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Power Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/dashboard-index.css" />
+</head>
+<body class="dashboard-page">
+  <button type="button" class="mobile-toggle" id="sidebar-toggle" aria-label="Open menu">☰</button>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-title">Power<span>Monitor</span></div>
+        <div class="sidebar__brand-sub">Theft Detection · Energy SCADA</div>
+      </div>
+
+      <nav class="sidebar__nav" aria-label="Main">
+        <a href="/" class="active">
+          <svg class="sidebar__nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+        <a href="/history">
+          <svg class="sidebar__nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 5 5-9"/></svg>
+          History
+        </a>
+        <a href="/alerts" id="nav-alerts">
+          <svg class="sidebar__nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Alerts
+          <span class="nav-badge" id="alerts-badge" data-count="0">0</span>
+        </a>
+        <a href="/budget">
+          <svg class="sidebar__nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Budget
+        </a>
+        <a href="/settings">
+          <svg class="sidebar__nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Settings
+        </a>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="sidebar-status__row" id="system-status-row">
+          <span class="sidebar-status__dot sidebar-status__dot--ok" id="status-dot" aria-hidden="true"></span>
+          <span id="status-label">SYSTEM NORMAL</span>
+        </div>
+        <div class="sidebar-status__last">
+          Last reading: <span id="sidebar-last-reading">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="dash-header">
+        <div>
+          <h1>Operations Dashboard</h1>
+          <p>Live feeder telemetry · ACS712 / ZMPT101B · Blynk stream</p>
+        </div>
+        <span class="dash-live-badge" id="live-badge">Connecting</span>
+      </header>
+
+      <section class="kpi-grid" id="kpi-grid" aria-label="Key metrics">
+        <article class="kpi-card" id="kpi-voltage" style="--kpi-accent: #1e88e5">
+          <div class="kpi-card__top">
+            <svg class="kpi-card__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" stroke="#1e88e5" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <span class="kpi-card__label">Line Voltage</span>
+          </div>
+          <div class="kpi-card__value-row">
+            <span class="kpi-card__value" id="val-voltage">—</span>
+            <span class="kpi-card__unit">V</span>
+          </div>
+          <div class="kpi-card__delta kpi-card__delta--flat" id="delta-voltage">—</div>
+        </article>
+
+        <article class="kpi-card" id="kpi-power" style="--kpi-accent: #00b4d8">
+          <div class="kpi-card__top">
+            <svg class="kpi-card__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="#00b4d8" stroke-width="2"/>
+              <path d="M12 7v5l3 3" stroke="#00b4d8" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="kpi-card__label">Real Power</span>
+          </div>
+          <div class="kpi-card__value-row">
+            <span class="kpi-card__value" id="val-power">—</span>
+            <span class="kpi-card__unit">W</span>
+          </div>
+          <div class="kpi-card__delta kpi-card__delta--flat" id="delta-power">—</div>
+        </article>
+
+        <article class="kpi-card" id="kpi-energy" style="--kpi-accent: #1565c0">
+          <div class="kpi-card__top">
+            <svg class="kpi-card__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="2" stroke="#1565c0" stroke-width="2"/>
+              <path d="M8 12h8M12 8v8" stroke="#1565c0" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="kpi-card__label">Cumulative Energy</span>
+          </div>
+          <div class="kpi-card__value-row">
+            <span class="kpi-card__value" id="val-energy">—</span>
+            <span class="kpi-card__unit">kWh</span>
+          </div>
+          <div class="kpi-card__delta kpi-card__delta--flat" id="delta-energy">—</div>
+        </article>
+
+        <article class="kpi-card" id="kpi-diff" style="--kpi-accent: #d97706">
+          <div class="kpi-card__top">
+            <svg class="kpi-card__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 12h6M14 12h6M10 8v8" stroke="#d97706" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="kpi-card__label">Differential Current</span>
+          </div>
+          <div class="kpi-card__value-row">
+            <span class="kpi-card__value" id="val-differential">—</span>
+            <span class="kpi-card__unit">A</span>
+          </div>
+          <div class="kpi-card__delta kpi-card__delta--flat" id="delta-diff">—</div>
+        </article>
+      </section>
+
+      <section class="current-strip" aria-label="Line currents">
+        <article class="current-strip__card">
+          <span class="current-strip__label">Current In (ACS712)</span>
+          <span class="current-strip__value"><span id="val-current-in">—</span> <span class="current-strip__unit">A</span></span>
+        </article>
+        <article class="current-strip__card">
+          <span class="current-strip__label">Current Out (ACS712)</span>
+          <span class="current-strip__value"><span id="val-current-out">—</span> <span class="current-strip__unit">A</span></span>
+        </article>
+      </section>
+
+      <div class="alert-banner-dash" id="alert-banner" role="alert" aria-live="assertive">
+        <p class="alert-banner-dash__text" id="alert-banner-text">
+          <strong>Theft detected.</strong>
+          <span id="alert-banner-detail"></span>
+        </p>
+        <a href="/alerts" class="btn-view-alerts">View Alerts</a>
+      </div>
+
+      <section class="chart-stack">
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div>
+              <div class="chart-card__title">Real-Time Power &amp; Differential</div>
+              <div class="chart-card__subtitle">Sliding 60 s window · updates via SSE</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-realtime" aria-label="Real-time power chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div>
+              <div class="chart-card__title">Daily Energy Consumption</div>
+              <div class="chart-card__subtitle">Last 7 days · kWh per day</div>
+            </div>
+          </div>
+          <div class="chart-wrap chart-wrap--bar">
+            <canvas id="chart-daily" aria-label="Daily energy bar chart"></canvas>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="/js/poll.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

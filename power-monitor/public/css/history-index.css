@@ -1,0 +1,307 @@
+/* History page — matches dashboard IEEE light theme */
+body.history-page {
+  --color-navy: #0a1628;
+  --color-navy-light: #112240;
+  --color-blue: #1565c0;
+  --color-blue-light: #1e88e5;
+  --color-cyan: #00b4d8;
+  --color-white: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text-main: #1a202c;
+  --color-text-muted: #64748b;
+  --color-alert-red: #dc2626;
+  --color-alert-bg: #fef2f2;
+  --color-ok-green: #16a34a;
+  --sidebar-width: 240px;
+  --shadow-card: 0 1px 3px rgba(10, 22, 40, 0.08), 0 4px 12px rgba(10, 22, 40, 0.06);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--color-white);
+  color: var(--color-text-main);
+}
+
+body.history-page .sidebar {
+  background: var(--color-navy);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.history-page .sidebar__brand-title { color: #fff; font-weight: 600; }
+body.history-page .sidebar__brand-title span { color: var(--color-cyan); }
+body.history-page .sidebar__brand-sub { color: rgba(248, 250, 252, 0.55); }
+body.history-page .sidebar__nav a { color: rgba(248, 250, 252, 0.75); }
+body.history-page .sidebar__nav a:hover { background: var(--color-navy-light); color: #fff; }
+body.history-page .sidebar__nav a.active {
+  background: var(--color-navy-light);
+  color: var(--color-cyan);
+  border-left-color: var(--color-cyan);
+}
+
+body.history-page .main-content {
+  background: var(--color-white);
+  padding: 1.5rem 1.75rem 2rem;
+  min-width: 0;
+}
+
+body.history-page h1,
+body.history-page h2,
+body.history-page h3 {
+  color: var(--color-text-main);
+}
+
+body.history-page h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+body.history-page .sidebar__brand {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.history-page .sidebar__footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 250, 252, 0.5);
+}
+
+body.history-page .sidebar__nav a.active {
+  border-left: 3px solid var(--color-cyan);
+  padding-left: calc(0.75rem - 3px);
+}
+
+.hist-header p {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-top: 0.2rem;
+}
+
+.date-range-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  padding: 1rem 1.15rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+}
+
+.date-field label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.date-field input[type="date"] {
+  padding: 0.45rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-main);
+  background: var(--color-white);
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--color-blue);
+  border-color: var(--color-blue);
+  color: #fff;
+}
+
+.btn--primary:hover { background: var(--color-blue-light); }
+
+.hist-chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.hist-chart-card__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.hist-chart-card__hint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.hist-chart-wrap {
+  position: relative;
+  height: 280px;
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.hist-chart-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.hist-chart-wrap--heatmap {
+  height: auto;
+  min-height: 240px;
+  overflow: visible;
+}
+
+#heatmap-canvas {
+  display: block;
+  max-width: 100%;
+  cursor: crosshair;
+  border-radius: 4px;
+}
+
+.hist-loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.heatmap-labels {
+  display: grid;
+  grid-template-columns: 72px repeat(24, 1fr);
+  gap: 2px;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.heatmap-labels span:first-child { grid-column: 1; }
+.heatmap-row-labels {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 72px;
+  pointer-events: none;
+}
+
+#heatmap-tooltip {
+  position: fixed;
+  display: none;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  background: var(--color-navy);
+  color: #fff;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+
+.hist-table-section {
+  margin-top: 1.5rem;
+}
+
+.hist-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.hist-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+table.hist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+table.hist-table th,
+table.hist-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+
+table.hist-table th {
+  background: var(--color-white);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+table.hist-table tbody tr:hover td {
+  background: rgba(30, 136, 229, 0.04);
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pill--ok {
+  background: #dcfce7;
+  color: var(--color-ok-green);
+}
+
+.pill--alert {
+  background: var(--color-alert-bg);
+  color: var(--color-alert-red);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.pagination button {
+  padding: 0.35rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  body.history-page .main-content {
+    margin-left: 0;
+    padding-top: 3.5rem;
+  }
+}

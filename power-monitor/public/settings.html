@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings — Power Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+  <button type="button" class="mobile-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-title">Power<span>Monitor</span></div>
+        <div class="sidebar__brand-sub">Energy &amp; Theft Detection</div>
+      </div>
+      <nav class="sidebar__nav">
+        <a href="/"><span class="sidebar__nav-icon">◉</span> Dashboard</a>
+        <a href="/history"><span class="sidebar__nav-icon">▤</span> History</a>
+        <a href="/budget"><span class="sidebar__nav-icon">$</span> Budget</a>
+        <a href="/alerts"><span class="sidebar__nav-icon">⚠</span> Alerts</a>
+        <a href="/settings" class="active"><span class="sidebar__nav-icon">⚙</span> Settings</a>
+      </nav>
+      <div class="sidebar__footer">Restart app after .env token change</div>
+    </aside>
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <h1>Configuration</h1>
+          <p class="subtitle">Thresholds and tariff (Blynk token is set via server <code class="mono">.env</code>)</p>
+        </div>
+        <span class="badge" id="mode-badge">—</span>
+      </header>
+
+      <section class="settings-panel">
+        <form id="settings-form">
+          <div class="form-group">
+            <label for="tariff">Tariff ($/kWh)</label>
+            <input type="number" id="tariff" name="tariff_kwh_cost" min="0" step="0.0001" required />
+          </div>
+          <div class="form-group">
+            <label for="threshold">Alert threshold (mA)</label>
+            <input type="number" id="threshold" name="alert_threshold_ma" min="0" step="1" required />
+          </div>
+          <p class="subtitle" style="margin-bottom:1rem">
+            Blynk token: <span id="blynk-status">—</span><br />
+            Poll interval: <span id="poll-interval" class="mono">—</span>s
+          </p>
+          <button type="submit" class="btn btn--primary">Save settings</button>
+          <span id="save-msg" class="subtitle" style="margin-left:0.75rem"></span>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script>
+    async function loadSettings() {
+      const res = await fetch("/api/settings");
+      if (!res.ok) return;
+      const s = await res.json();
+      document.getElementById("tariff").value = s.tariff_kwh_cost;
+      document.getElementById("threshold").value = s.alert_threshold_ma;
+      document.getElementById("blynk-status").textContent = s.demo_mode
+        ? "DEMO — simulated household + theft events"
+        : s.blynk_token_set
+          ? "Configured (see .env)"
+          : "Not set — DEMO mode";
+      document.getElementById("poll-interval").textContent = s.blynk_poll_interval;
+      const badge = document.getElementById("mode-badge");
+      badge.textContent = s.demo_mode ? "DEMO mode" : "Blynk live";
+      badge.className = s.demo_mode ? "badge" : "badge badge--live";
+    }
+
+    document.getElementById("settings-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {
+        tariff_kwh_cost: parseFloat(document.getElementById("tariff").value),
+        alert_threshold_ma: parseFloat(document.getElementById("threshold").value),
+      };
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const msg = document.getElementById("save-msg");
+      msg.textContent = res.ok ? "Saved." : "Save failed.";
+      if (res.ok) loadSettings();
+    });
+
+    document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
+      document.querySelector(".sidebar")?.classList.toggle("open");
+    });
+    document.addEventListener("DOMContentLoaded", loadSettings);
+  </script>
+</body>
+</html>

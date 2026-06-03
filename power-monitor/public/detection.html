@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Detection — Power Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/dashboard.css" />
+  <link rel="stylesheet" href="/css/detection.css" />
+</head>
+<body>
+  <button type="button" class="mobile-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-title">Power<span>Monitor</span></div>
+        <div class="sidebar__brand-sub">Utility oversight · Two-tier detection</div>
+      </div>
+      <nav class="sidebar__nav">
+        <a href="/"><span class="sidebar__nav-icon">◉</span> Dashboard</a>
+        <a href="/history"><span class="sidebar__nav-icon">▤</span> History</a>
+        <a href="/budget"><span class="sidebar__nav-icon">$</span> Budget</a>
+        <a href="/detection" class="active"><span class="sidebar__nav-icon">⚡</span> Detection</a>
+        <a href="/settings"><span class="sidebar__nav-icon">⚙</span> Settings</a>
+      </nav>
+      <div class="sidebar__footer">Live differential · Incident log</div>
+    </aside>
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <h1>Power Theft Detection</h1>
+          <p class="subtitle">Dual-strategy algorithm — Normal, Investigation, and Isolation tiers driven by device <code class="mono">system_status</code></p>
+        </div>
+      </header>
+
+      <div class="det-isolation-banner" id="det-isolation-banner" role="alert">
+        <strong>Load isolated</strong> — manual reset required at the device (relay tripped; buzzer/LED active).
+      </div>
+
+      <div class="det-layout">
+        <section class="det-panel">
+          <div class="det-panel__title">Live differential gauge</div>
+          <div id="det-state-badge" class="det-state-badge det-state-badge--normal">NORMAL</div>
+          <p class="det-readout" id="det-state-readout">Waiting for live reading…</p>
+
+          <div class="det-gauge-wrap">
+            <div class="det-gauge__scale">
+              <span>0 mA</span>
+              <span id="gauge-ma-a">0.000 A</span>
+            </div>
+            <div class="det-gauge__track">
+              <div class="det-gauge__zones">
+                <div class="det-gauge__zone det-gauge__zone--normal" id="zone-normal"></div>
+                <div class="det-gauge__zone det-gauge__zone--investigation" id="zone-investigation"></div>
+                <div class="det-gauge__zone det-gauge__zone--isolation" id="zone-isolation"></div>
+              </div>
+              <div class="det-gauge__needle" id="gauge-needle" style="left:0%"></div>
+            </div>
+            <div class="det-gauge__bands">
+              <div class="det-gauge__band det-gauge__band--normal" id="band-normal">Normal</div>
+              <div class="det-gauge__band det-gauge__band--investigation" id="band-investigation">Investigation</div>
+              <div class="det-gauge__band det-gauge__band--isolation" id="band-isolation">Isolation</div>
+            </div>
+            <div class="det-gauge__value"><span id="gauge-ma">—</span><span>mA differential</span></div>
+          </div>
+        </section>
+
+        <aside class="det-panel det-legend">
+          <div class="det-panel__title">Algorithm legend</div>
+          <dl>
+            <dt><span class="det-legend__dot det-legend__dot--normal"></span> Normal</dt>
+            <dd>Differential below investigation threshold — no action. Cloud backstop: &lt; <span id="legend-alert-ma">100 mA</span>.</dd>
+            <dt><span class="det-legend__dot det-legend__dot--investigation"></span> Investigation</dt>
+            <dd>Between investigation and isolation thresholds — flag for human review; <strong>no</strong> relay trip.</dd>
+            <dt><span class="det-legend__dot det-legend__dot--isolation"></span> Isolation</dt>
+            <dd>Above <span id="legend-iso-ma">300 mA</span> — device autonomously trips relay + buzzer/LED; manual reset required.</dd>
+          </dl>
+          <p class="det-legend__note">Device <code class="mono">system_status</code> is authoritative when present. Thresholds are configurable under Settings.</p>
+        </aside>
+      </div>
+
+      <section class="det-panel det-spark-wrap">
+        <div class="det-panel__title">Differential trend (last 60 s)</div>
+        <canvas id="spark-canvas" height="72" aria-label="60 second differential sparkline"></canvas>
+      </section>
+
+      <section class="det-panel">
+        <div class="det-panel__title">Incident log</div>
+        <div class="det-log-toolbar">
+          <label><input type="checkbox" id="filter-unack" /> Unacknowledged only</label>
+          <button type="button" class="btn" id="incidents-refresh">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Tier</th>
+                <th>Differential</th>
+                <th>Message</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="incidents-body">
+              <tr><td colspan="6">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/js/reading-fields.js"></script>
+  <script src="/js/poll.js"></script>
+  <script src="/js/admin-auth.js"></script>
+  <script src="/js/detection.js"></script>
+</body>
+</html>

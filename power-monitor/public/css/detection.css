@@ -1,0 +1,317 @@
+/* Detection page — two-tier gauge, state badge, incident log */
+
+.det-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 960px) {
+  .det-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.det-panel {
+  background: var(--color-navy-900);
+  border: 1px solid var(--color-navy-800);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+}
+
+.det-panel__title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-slate-400);
+  margin-bottom: 0.75rem;
+}
+
+/* State badge */
+.det-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12rem;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 1rem;
+  border: 2px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.det-state-badge--normal {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+  border-color: rgba(46, 204, 113, 0.45);
+}
+
+.det-state-badge--investigation {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f39c12;
+  border-color: rgba(243, 156, 18, 0.5);
+}
+
+.det-state-badge--isolated {
+  background: rgba(231, 76, 60, 0.18);
+  color: #e74c3c;
+  border-color: rgba(231, 76, 60, 0.55);
+  animation: det-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes det-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(231, 76, 60, 0.25);
+  }
+}
+
+.det-readout {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-slate-400);
+  margin-top: 0.35rem;
+}
+
+.det-readout strong {
+  color: var(--color-white);
+  font-weight: 600;
+}
+
+/* Isolation banner */
+.det-isolation-banner {
+  display: none;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.45);
+  color: #ffb4ab;
+  font-weight: 500;
+}
+
+.det-isolation-banner.is-visible {
+  display: block;
+}
+
+.det-isolation-banner strong {
+  color: #fff;
+}
+
+/* Horizontal gauge */
+.det-gauge-wrap {
+  margin-top: 0.5rem;
+}
+
+.det-gauge__scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--color-slate-400);
+  margin-bottom: 0.35rem;
+  font-family: var(--font-mono);
+}
+
+.det-gauge__track {
+  position: relative;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-navy-950);
+  border: 1px solid var(--color-navy-700);
+}
+
+.det-gauge__zones {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.det-gauge__zone {
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.det-gauge__zone--normal {
+  background: rgba(46, 204, 113, 0.35);
+}
+
+.det-gauge__zone--investigation {
+  background: rgba(243, 156, 18, 0.4);
+}
+
+.det-gauge__zone--isolation {
+  background: rgba(231, 76, 60, 0.45);
+  flex: 1;
+}
+
+.det-gauge__needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--color-white);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  transition: left 0.35s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.det-gauge__bands {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+  font-size: 0.72rem;
+}
+
+.det-gauge__band {
+  text-align: center;
+  padding: 0.35rem 0.25rem;
+  border-radius: 4px;
+  line-height: 1.35;
+  white-space: pre-line;
+}
+
+.det-gauge__band--normal {
+  background: rgba(46, 204, 113, 0.12);
+  color: #7dcea0;
+}
+
+.det-gauge__band--investigation {
+  background: rgba(243, 156, 18, 0.12);
+  color: #f5b041;
+}
+
+.det-gauge__band--isolation {
+  background: rgba(231, 76, 60, 0.12);
+  color: #ec7063;
+}
+
+.det-gauge__value {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.det-gauge__value span {
+  font-size: 0.85rem;
+  color: var(--color-slate-400);
+  font-weight: 400;
+  margin-left: 0.35rem;
+}
+
+/* Algorithm legend */
+.det-legend dl {
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.det-legend dt {
+  font-weight: 600;
+  margin-top: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.det-legend dt:first-child {
+  margin-top: 0;
+}
+
+.det-legend dd {
+  margin-left: 0;
+  margin-top: 0.2rem;
+  color: var(--color-slate-400);
+  padding-left: 1rem;
+}
+
+.det-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.det-legend__dot--normal {
+  background: #2ecc71;
+}
+
+.det-legend__dot--investigation {
+  background: #f39c12;
+}
+
+.det-legend__dot--isolation {
+  background: #e74c3c;
+}
+
+.det-legend__note {
+  margin-top: 0.85rem;
+  font-size: 0.72rem;
+  color: var(--color-slate-400);
+  border-top: 1px solid var(--color-navy-800);
+  padding-top: 0.65rem;
+}
+
+/* Sparkline */
+.det-spark-wrap {
+  margin-bottom: 1.25rem;
+}
+
+.det-spark-wrap canvas {
+  width: 100%;
+  height: 72px;
+  display: block;
+}
+
+/* Incident log */
+.det-log-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pill-tier {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pill-tier--investigation {
+  background: rgba(243, 156, 18, 0.2);
+  color: #f5b041;
+  border: 1px solid rgba(243, 156, 18, 0.4);
+}
+
+.pill-tier--isolation {
+  background: rgba(231, 76, 60, 0.2);
+  color: #ec7063;
+  border: 1px solid rgba(231, 76, 60, 0.45);
+}
+
+.pill-tier--unknown {
+  background: var(--color-navy-800);
+  color: var(--color-slate-400);
+}
+
+.det-diff-cell {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

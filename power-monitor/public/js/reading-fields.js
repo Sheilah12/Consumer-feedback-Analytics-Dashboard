@@ -44,6 +44,10 @@
     return st === "alert" || st === "isolated" || Boolean(r.alert_triggered);
   }
 
+  function isIsolatedReading(r) {
+    return systemStatus(r) === "isolated";
+  }
+
   function hasReadingData(r) {
     return (
       r &&
@@ -63,6 +67,7 @@
     energyKwh,
     systemStatus,
     isAlertReading,
+    isIsolatedReading,
     hasReadingData,
   };
 })(window);

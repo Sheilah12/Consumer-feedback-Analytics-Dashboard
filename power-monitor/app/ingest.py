@@ -152,17 +152,52 @@ async def ingest_webhook(payload: WebhookPayload) -> Reading:
 
 
 async def ingest_webhook_dict(data: dict[str, Any]) -> Reading:
-    """Accept webhook JSON with energy_kwh_cumulative or legacy energy_kwh key."""
-    cumulative = data.get("energy_kwh_cumulative", data.get("energy_kwh"))
-    if cumulative is None:
-        raise ValueError("energy_kwh_cumulative is required")
-
-    payload = WebhookPayload(
-        voltage=float(data["voltage"]),
-        current_in=float(data["current_in"]),
-        current_out=float(data["current_out"]),
-        real_power=float(data["real_power"]),
-        energy_kwh_cumulative=float(cumulative),
-        hardware_alert=bool(data.get("hardware_alert", False)),
-    )
+    """Accept canonical JSON or Blynk virtual-pin keys (V0–V5 / v0–v5)."""
+    normalized = _normalize_webhook_payload(data)
+    payload = WebhookPayload(**normalized)
     return await ingest_webhook(payload)
+
+
+def _pick_float(data: dict[str, Any], *keys: str) -> Optional[float]:
+    for key in keys:
+        for candidate in (key, key.lower(), key.upper()):
+            if candidate in data and data[candidate] not in (None, ""):
+                return float(data[candidate])
+    return None
+
+
+def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Map Blynk pin payloads or canonical field names to WebhookPayload kwargs."""
+    voltage = _pick_float(data, "voltage", "V0", "v0")
+    current_in = _pick_float(data, "current_in", "V1", "v1")
+    current_out = _pick_float(data, "current_out", "V2", "v2")
+    real_power = _pick_float(data, "real_power", "power", "V3", "v3")
+    cumulative = _pick_float(
+        data, "energy_kwh_cumulative", "energy_kwh", "energy", "V4", "v4"
+    )
+
+    hardware_raw = data.get("hardware_alert", data.get("V5", data.get("v5", 0)))
+    hardware_alert = bool(float(hardware_raw) >= 0.5) if hardware_raw not in (None, "") else False
+
+    missing = [
+        name
+        for name, val in (
+            ("voltage", voltage),
+            ("current_in", current_in),
+            ("current_out", current_out),
+            ("real_power", real_power),
+            ("energy_kwh_cumulative", cumulative),
+        )
+        if val is None
+    ]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    return {
+        "voltage": voltage,
+        "current_in": current_in,
+        "current_out": current_out,
+        "real_power": real_power,
+        "energy_kwh_cumulative": cumulative,
+        "hardware_alert": hardware_alert,
+    }

@@ -60,7 +60,7 @@
       <header class="dash-header">
         <div>
           <h1>Operations Dashboard</h1>
-          <p>Live feeder telemetry · ACS712 / ZMPT101B · Blynk stream</p>
+          <p>Live feeder telemetry · ACS712 / ZMPT101B · webhook ingest</p>
         </div>
         <span class="dash-live-badge" id="live-badge">Connecting</span>
       </header>
@@ -149,7 +149,7 @@
           <div class="chart-card__header">
             <div>
               <div class="chart-card__title">Real-Time Power &amp; Differential</div>
-              <div class="chart-card__subtitle">Sliding 60 s window · updates via SSE</div>
+              <div class="chart-card__subtitle">Sliding 60 s window · polls every 5 s</div>
             </div>
           </div>
           <div class="chart-wrap">

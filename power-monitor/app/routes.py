@@ -119,12 +119,19 @@ async def _config_response() -> ConfigResponse:
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> JSONResponse:
     db_ok = await db.check_db_ok()
-    last_ts = await db.get_last_ingest_ts()
-    db_size = await db.get_db_size_bytes() if db_ok else None
+    last_ts = None
+    db_size = None
+    if db_ok:
+        try:
+            last_ts = await db.get_last_ingest_ts()
+            db_size = await db.get_db_size_bytes()
+        except Exception:
+            db_ok = False
+
     body = HealthResponse(
         status="ok" if db_ok else "degraded",
         db="ok" if db_ok else "error",
-        blynk=await _blynk_health(),
+        blynk=await _blynk_health() if db_ok else "degraded",
         last_ingest_ts=last_ts.isoformat().replace("+00:00", "Z") if last_ts else None,
         db_size_bytes=db_size,
         demo_mode=False,
@@ -134,7 +141,13 @@ async def health() -> JSONResponse:
 
 @app.get("/api/latest")
 async def api_latest() -> JSONResponse:
-    reading = await db.get_latest_reading()
+    try:
+        reading = await db.get_latest_reading()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database unavailable: {exc}",
+        ) from exc
     if not reading:
         raise HTTPException(status_code=404, detail="No readings yet")
     return _no_cache(reading_to_api(reading))
@@ -241,13 +254,61 @@ async def api_config_get() -> JSONResponse:
     return _no_cache((await _config_response()).model_dump())
 
 
+def _verify_ingest_secret(request: Request, secret: str) -> None:
+    expected = settings.ingest_secret.strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="INGEST_SECRET is not configured on the server",
+        )
+
+    header_secret = request.headers.get("X-Ingest-Secret", "").strip()
+    auth = request.headers.get("Authorization", "").strip()
+    bearer = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+
+    if secret == expected or header_secret == expected or bearer == expected:
+        return
+    raise HTTPException(status_code=401, detail="Invalid ingest secret")
+
+
+@app.get("/api/blynk/webhook")
+async def api_blynk_webhook_info() -> JSONResponse:
+    """Browser-friendly hint — Blynk must POST to this URL."""
+    return _no_cache(
+        {
+            "status": "ready",
+            "method": "POST",
+            "note": "GET is for testing only. Configure Blynk to POST JSON here.",
+            "url": "/api/blynk/webhook?secret=<INGEST_SECRET>",
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Ingest-Secret": "<INGEST_SECRET> (optional alternative to ?secret=)",
+            },
+            "body_canonical": {
+                "voltage": 229.4,
+                "current_in": 4.123,
+                "current_out": 4.118,
+                "real_power": 945.2,
+                "energy_kwh_cumulative": 1234.5,
+            },
+            "body_blynk_pins": {
+                "V0": 229.4,
+                "V1": 4.123,
+                "V2": 4.118,
+                "V3": 945.2,
+                "V4": 1234.5,
+                "V5": 0,
+            },
+        }
+    )
+
+
 @app.post("/api/blynk/webhook")
 async def api_blynk_webhook(
     request: Request,
     secret: str = Query(""),
 ) -> JSONResponse:
-    if not settings.ingest_secret or secret != settings.ingest_secret:
-        raise HTTPException(status_code=401, detail="Invalid ingest secret")
+    _verify_ingest_secret(request, secret)
 
     try:
         data = await request.json()

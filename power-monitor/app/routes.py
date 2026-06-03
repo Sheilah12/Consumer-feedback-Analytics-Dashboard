@@ -271,7 +271,36 @@ def _verify_ingest_secret(request: Request, secret: str) -> None:
     raise HTTPException(status_code=401, detail="Invalid ingest secret")
 
 
+@app.get("/api/blynk/ping")
+async def api_blynk_ping() -> JSONResponse:
+    """Connectivity check — always 200. Use this URL in Blynk to verify the host is reachable."""
+    return _no_cache(
+        {
+            "status": "ok",
+            "service": "power-monitor",
+            "webhook": "/api/blynk/webhook?secret=<INGEST_SECRET>",
+            "note": "410 from Blynk usually means an old Vercel preview URL — use your production domain.",
+        }
+    )
+
+
+async def _parse_webhook_body(request: Request) -> dict:
+    """Accept JSON or URL-encoded form (Blynk Web Form content type)."""
+    content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if content_type == "application/x-www-form-urlencoded":
+        form = await request.form()
+        return {str(k): form[k] for k in form.keys()}
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Invalid JSON body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="JSON body must be an object")
+    return body
+
+
 @app.get("/api/blynk/webhook")
+@app.get("/api/blynk/webhook/")
 async def api_blynk_webhook_info() -> JSONResponse:
     """Browser-friendly hint — Blynk must POST to this URL."""
     return _no_cache(
@@ -279,6 +308,7 @@ async def api_blynk_webhook_info() -> JSONResponse:
             "status": "ready",
             "method": "POST",
             "note": "GET is for testing only. Configure Blynk to POST JSON here.",
+            "ping": "/api/blynk/ping",
             "url": "/api/blynk/webhook?secret=<INGEST_SECRET>",
             "headers": {
                 "Content-Type": "application/json",
@@ -299,16 +329,13 @@ async def api_blynk_webhook_info() -> JSONResponse:
 
 
 @app.post("/api/blynk/webhook")
+@app.post("/api/blynk/webhook/")
 async def api_blynk_webhook(
     request: Request,
     secret: str = Query(""),
 ) -> JSONResponse:
     _verify_ingest_secret(request, secret)
-
-    try:
-        data = await request.json()
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="Invalid JSON body") from exc
+    data = await _parse_webhook_body(request)
 
     try:
         reading = await ingest.ingest_webhook_dict(data)

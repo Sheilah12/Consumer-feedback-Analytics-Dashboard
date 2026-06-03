@@ -4,6 +4,16 @@ import pytest
 
 from app import ingest
 from app.ingest import _compute_interval, _parse_blynk_body
+from app.stream_fields import (
+    SYSTEM_ALERT,
+    SYSTEM_ISOLATED,
+    SYSTEM_NORMAL,
+    derive_status_from_differential,
+    is_tier_transition,
+    map_device_status,
+    resolve_system_status,
+    tier_for_status,
+)
 
 
 @pytest.mark.unit
@@ -21,6 +31,37 @@ def test_compute_interval_normal():
 @pytest.mark.unit
 def test_compute_interval_reboot():
     assert _compute_interval(50.0, 100.0) == 0.0
+
+
+@pytest.mark.unit
+def test_map_device_status_tiers():
+    assert map_device_status("normal") == SYSTEM_NORMAL
+    assert map_device_status("alert") == SYSTEM_ALERT
+    assert map_device_status("investigation") == SYSTEM_ALERT
+    assert map_device_status("isolated") == SYSTEM_ISOLATED
+    assert map_device_status("theft") == SYSTEM_ISOLATED
+
+
+@pytest.mark.unit
+def test_derive_status_from_differential_bands():
+    assert derive_status_from_differential(50, 100, 300) == SYSTEM_NORMAL
+    assert derive_status_from_differential(150, 100, 300) == SYSTEM_ALERT
+    assert derive_status_from_differential(350, 100, 300) == SYSTEM_ISOLATED
+
+
+@pytest.mark.unit
+def test_resolve_system_status_device_authoritative():
+    status, hw = resolve_system_status("isolated", 50, 100, 300)
+    assert status == SYSTEM_ISOLATED
+    assert hw is True
+
+
+@pytest.mark.unit
+def test_tier_transition():
+    assert is_tier_transition(SYSTEM_NORMAL, SYSTEM_ALERT) is True
+    assert is_tier_transition(SYSTEM_ALERT, SYSTEM_ISOLATED) is True
+    assert is_tier_transition(SYSTEM_ISOLATED, SYSTEM_ISOLATED) is False
+    assert tier_for_status(SYSTEM_ISOLATED) == "isolation"
 
 
 @pytest.mark.unit
@@ -54,7 +95,7 @@ def test_normalize_blynk_stream_payload():
     assert out["current_in"] == pytest.approx(4.123)
     assert out["current_out"] == pytest.approx(4.118)
     assert out["differential_ma"] == pytest.approx(5.0, rel=0.01)
-    assert out["hardware_alert"] is False
+    assert out["system_status"] == "normal"
     assert out["ts"] is not None
 
 
@@ -69,3 +110,4 @@ async def test_ingest_snapshot():
     )
     assert reading.differential_current == pytest.approx(150.0, rel=0.01)
     assert reading.energy_kwh == pytest.approx(1.0)
+    assert reading.system_status == SYSTEM_ALERT

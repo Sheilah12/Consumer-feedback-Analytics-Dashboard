@@ -45,7 +45,6 @@ async def seed(hours: int = 48, step_seconds: int = 30) -> None:
             current_out=current_out,
             real_power=power,
             energy_kwh_cumulative=cumulative,
-            hardware_alert=False,
             ts=ts,
         )
         count += 1

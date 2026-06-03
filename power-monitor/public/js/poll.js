@@ -56,13 +56,11 @@
     const baseAmps = 3.2 * load + 0.25 * Math.sin(t / 18);
     let currentIn;
     let currentOut;
-    let hardwareAlert = false;
 
     if (inTheft) {
       const deltaA = 0.35 + Math.random() * 0.25;
       currentIn = baseAmps + deltaA;
       currentOut = baseAmps - 0.02;
-      hardwareAlert = true;
     } else {
       currentIn = baseAmps + (Math.random() - 0.5) * 0.06;
       currentOut = currentIn - (0.002 + Math.random() * 0.01);
@@ -76,7 +74,21 @@
     demoLastTs = now.getTime();
 
     const diffA = Math.abs(currentIn - currentOut);
-    const alertTriggered = diffA * 1000 > 150 || hardwareAlert;
+    const diffMa = diffA * 1000;
+    let systemStatus = "normal";
+    if (inTheft && diffMa >= 300) {
+      systemStatus = "isolated";
+    } else if (inTheft || diffMa >= 100) {
+      systemStatus = "alert";
+    }
+    const hardwareAlert = systemStatus === "isolated";
+    const alertTriggered = systemStatus !== "normal";
+    const tier =
+      systemStatus === "isolated"
+        ? "isolation"
+        : systemStatus === "alert"
+          ? "investigation"
+          : null;
     const ts = now.toISOString();
 
     return {
@@ -88,7 +100,8 @@
       voltage: Math.round(voltage * 100) / 100,
       real_power: Math.round(realPower * 10) / 10,
       energy_kwh_cumulative: Math.round(demoEnergy * 10000) / 10000,
-      system_status: alertTriggered ? "alert" : "normal",
+      system_status: systemStatus,
+      tier,
       alert_triggered: alertTriggered,
       hardware_alert: hardwareAlert,
     };

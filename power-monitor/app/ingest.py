@@ -1,4 +1,4 @@
-"""Push-based ingestion — webhook parsing, interval energy, noise-suppressed alerts."""
+"""Push-based ingestion — webhook parsing, interval energy, tiered alerts."""
 
 from __future__ import annotations
 
@@ -12,10 +12,16 @@ from app import db
 from app.config import settings
 from app.models import Reading, ReadingCreate, WebhookPayload
 from app.stream_fields import (
+    SYSTEM_ALERT,
+    SYSTEM_ISOLATED,
+    SYSTEM_NORMAL,
+    alert_message,
     differential_to_ma,
+    is_tier_transition,
     parse_device_ts,
-    parse_system_status,
     pick_float,
+    resolve_system_status,
+    tier_for_status,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,13 +61,14 @@ async def fetch_blynk_pins(client: httpx.AsyncClient) -> dict[str, Any]:
     response.raise_for_status()
     v0, v1, v2, v3, v4, v5 = _parse_blynk_body(response.text)
 
+    status = SYSTEM_ISOLATED if v5 >= 2 else (SYSTEM_ALERT if v5 >= 0.5 else SYSTEM_NORMAL)
     return {
         "voltage": v0,
         "live_current": v1,
         "neutral_current": v2,
         "real_power": v3,
         "energy_kwh_cumulative": v4,
-        "system_status": "alert" if v5 >= 0.5 else "normal",
+        "system_status": status,
     }
 
 
@@ -73,18 +80,16 @@ def _compute_interval(current_cumulative: float, previous: Optional[float]) -> f
     return max(0.0, current_cumulative - previous)
 
 
-async def _should_raise_alert(differential_ma: float, hardware_alert: bool) -> bool:
-    threshold = await db.get_alert_threshold_ma()
-    if hardware_alert:
-        return True
-    if differential_ma <= threshold:
-        return False
-
-    n = max(1, settings.consecutive_samples)
-    recent = await db.get_recent_differential_ma(n - 1)
-    if len(recent) < n - 1:
-        return False
-    return all(value > threshold for value in recent)
+def _device_status_raw(data: dict[str, Any]) -> Any:
+    if "system_status" in data and data["system_status"] not in (None, ""):
+        return data["system_status"]
+    if "hardware_alert" in data and data["hardware_alert"] not in (None, ""):
+        return data["hardware_alert"]
+    if "V5" in data and data["V5"] not in (None, ""):
+        return data["V5"]
+    if "v5" in data and data["v5"] not in (None, ""):
+        return data["v5"]
+    return None
 
 
 async def ingest_snapshot(
@@ -94,7 +99,8 @@ async def ingest_snapshot(
     current_out: float,
     real_power: float,
     energy_kwh_cumulative: float,
-    hardware_alert: bool = False,
+    system_status: Optional[str] = None,
+    device_status_raw: Any = None,
     differential_ma: Optional[float] = None,
     ts: Optional[datetime] = None,
 ) -> Reading:
@@ -103,9 +109,19 @@ async def ingest_snapshot(
     if differential_ma is None:
         differential_ma = abs(current_in - current_out) * 1000.0
 
+    alert_threshold = await db.get_alert_threshold_ma()
+    isolation_threshold = await db.get_isolation_threshold_ma()
+    status, hardware_alert = resolve_system_status(
+        device_status_raw if device_status_raw is not None else system_status,
+        differential_ma,
+        alert_threshold,
+        isolation_threshold,
+    )
+
     previous = await db.get_previous_cumulative()
     interval_kwh = _compute_interval(energy_kwh_cumulative, previous)
-    alert_triggered = await _should_raise_alert(differential_ma, hardware_alert)
+    previous_status = await db.get_latest_system_status()
+    alert_triggered = status != SYSTEM_NORMAL
 
     create = ReadingCreate(
         voltage=round(voltage, 3),
@@ -116,19 +132,26 @@ async def ingest_snapshot(
         energy_kwh_cumulative=round(energy_kwh_cumulative, 6),
         energy_kwh_interval=round(interval_kwh, 6),
         alert_triggered=alert_triggered,
+        hardware_alert=hardware_alert,
+        system_status=status,
     )
     await db.insert_reading(create, ts=ts)
 
-    if alert_triggered:
-        msg = (
-            f"Power theft alert: differential {differential_ma:.0f} mA "
-            f"(threshold {await db.get_alert_threshold_ma():.0f} mA)"
+    if is_tier_transition(previous_status, status):
+        tier = tier_for_status(status)
+        assert tier is not None
+        msg = alert_message(status, differential_ma, tier)
+        await db.insert_alert(
+            differential_ma,
+            msg,
+            tier=tier,
+            system_status=status,
+            ts=ts,
         )
-        if hardware_alert:
-            msg += "; system_status reported alert"
-        await db.insert_alert(differential_ma, msg, ts=ts)
         logger.warning(
-            "theft_alert differential_ma=%.1f hardware=%s",
+            "tier_alert status=%s tier=%s differential_ma=%.1f hardware=%s",
+            status,
+            tier,
             differential_ma,
             hardware_alert,
         )
@@ -136,6 +159,7 @@ async def ingest_snapshot(
     return Reading(
         timestamp=ts,
         hardware_alert=hardware_alert,
+        system_status=status,
         voltage=create.voltage,
         current_in=create.current_in,
         current_out=create.current_out,
@@ -154,7 +178,8 @@ async def ingest_webhook(payload: WebhookPayload) -> Reading:
         current_out=payload.current_out,
         real_power=payload.real_power,
         energy_kwh_cumulative=payload.energy_kwh_cumulative,
-        hardware_alert=payload.hardware_alert,
+        system_status=payload.system_status,
+        device_status_raw=payload.system_status,
         differential_ma=payload.differential_ma,
         ts=payload.ts,
     )
@@ -201,9 +226,8 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
     elif live is not None and neutral is not None:
         differential_ma = abs(live - neutral) * 1000.0
 
-    status_raw = data.get("system_status", data.get("hardware_alert", data.get("V5", data.get("v5"))))
-    hardware_alert = parse_system_status(status_raw)
-
+    status_raw = _device_status_raw(data)
+    system_status = str(status_raw).strip() if status_raw not in (None, "") else None
     ts = parse_device_ts(data)
 
     missing = [
@@ -226,7 +250,7 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
         "current_out": neutral,
         "real_power": real_power,
         "energy_kwh_cumulative": cumulative,
-        "hardware_alert": hardware_alert,
+        "system_status": system_status,
         "differential_ma": differential_ma,
         "ts": ts,
     }

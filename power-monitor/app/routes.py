@@ -114,6 +114,7 @@ async def _config_response() -> ConfigResponse:
     stored_token = await db.get_setting("blynk_token", "")
     return ConfigResponse(
         alert_threshold_ma=await db.get_alert_threshold_ma(),
+        isolation_threshold_ma=await db.get_isolation_threshold_ma(),
         tariff_kwh_cost=round(await db.get_tariff(), 2),
         currency=settings.currency,
         token_set=bool(token or stored_token),
@@ -250,6 +251,8 @@ async def api_config_update(body: ConfigUpdate, request: Request) -> JSONRespons
         await db.set_setting("tariff_kwh_cost", str(body.tariff_kwh_cost))
     if body.alert_threshold_ma is not None:
         await db.set_setting("alert_threshold_ma", str(body.alert_threshold_ma))
+    if body.isolation_threshold_ma is not None:
+        await db.set_setting("isolation_threshold_ma", str(body.isolation_threshold_ma))
     return _no_cache((await _config_response()).model_dump())
 
 

@@ -47,7 +47,37 @@ def test_webhook_and_latest(client: TestClient):
     assert data["live_current"] == pytest.approx(5.0, rel=0.01)
     assert data["neutral_current"] == pytest.approx(4.85, rel=0.01)
     assert data["system_status"] == "alert"
+    assert data["tier"] == "investigation"
+    assert data["hardware_alert"] is False
     assert data["current_in"] == pytest.approx(5.0, rel=0.01)
+
+
+def test_webhook_isolated_stored(client: TestClient):
+    os_environ = __import__("os").environ
+    secret = "test-ingest-secret"
+    os_environ["INGEST_SECRET"] = secret
+    from app.config import settings
+
+    settings.ingest_secret = secret
+    body = {
+        **INGEST_BODY,
+        "system_status": "isolated",
+        "differential": 0.35,
+        "energy_kwh_cumulative": 101.0,
+    }
+    r = client.post(f"/api/blynk/webhook?secret={secret}", json=body)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["system_status"] == "isolated"
+    assert data["tier"] == "isolation"
+    assert data["hardware_alert"] is True
+
+    latest = client.get("/api/latest").json()
+    assert latest["system_status"] == "isolated"
+    assert latest["hardware_alert"] is True
+
+    alerts = client.get("/api/alerts", params={"limit": 5}).json()
+    assert alerts["items"][0]["tier"] == "isolation"
 
 
 def test_readings_paginated(client: TestClient):

@@ -42,6 +42,7 @@
           <thead>
             <tr>
               <th>Time</th>
+              <th>Tier</th>
               <th>Differential (mA)</th>
               <th>Message</th>
               <th>Status</th>
@@ -49,7 +50,7 @@
             </tr>
           </thead>
           <tbody id="alerts-body">
-            <tr><td colspan="5">Loading…</td></tr>
+            <tr><td colspan="6">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -65,13 +66,13 @@
       const res = await fetch(url);
       const tbody = document.getElementById("alerts-body");
       if (!res.ok) {
-        tbody.innerHTML = "<tr><td colspan=\"5\">Failed to load alerts.</td></tr>";
+        tbody.innerHTML = "<tr><td colspan=\"6\">Failed to load alerts.</td></tr>";
         return;
       }
       const body = await res.json();
       const alerts = body.items || body;
       if (!alerts.length) {
-        tbody.innerHTML = "<tr><td colspan=\"5\">No alerts recorded.</td></tr>";
+        tbody.innerHTML = "<tr><td colspan=\"6\">No alerts recorded.</td></tr>";
         return;
       }
       tbody.innerHTML = alerts.map((a) => {
@@ -84,6 +85,7 @@
           : `<button type="button" class="btn btn--primary" data-id="${a.id}">Acknowledge</button>`;
         return `<tr>
           <td class="mono">${ts}</td>
+          <td>${a.tier || "—"}</td>
           <td class="mono">${a.differential_ma.toFixed(0)}</td>
           <td>${a.message}</td>
           <td>${status}</td>

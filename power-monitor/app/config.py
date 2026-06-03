@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     admin_token: str = ""
     cron_secret: str = ""
 
-    alert_threshold_ma: float = 150.0
+    alert_threshold_ma: float = 100.0
+    isolation_threshold_ma: float = 300.0
     consecutive_samples: int = 2
     tariff_kwh_cost: float = 25.0
     currency: str = "KES"

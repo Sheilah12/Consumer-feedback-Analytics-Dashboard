@@ -42,8 +42,12 @@
             <input type="number" id="tariff" name="tariff_kwh_cost" min="0" step="0.0001" required />
           </div>
           <div class="form-group">
-            <label for="threshold">Alert threshold (mA)</label>
+            <label for="threshold">Investigation threshold (mA, 0.1 A)</label>
             <input type="number" id="threshold" name="alert_threshold_ma" min="0" step="1" required />
+          </div>
+          <div class="form-group">
+            <label for="isolation-threshold">Isolation threshold (mA, 0.3 A)</label>
+            <input type="number" id="isolation-threshold" name="isolation_threshold_ma" min="0" step="1" required />
           </div>
           <div class="form-group">
             <label for="admin-token">Admin token (optional)</label>
@@ -77,6 +81,7 @@
       const cfg = await res.json();
       document.getElementById("tariff").value = cfg.tariff_kwh_cost;
       document.getElementById("threshold").value = cfg.alert_threshold_ma;
+      document.getElementById("isolation-threshold").value = cfg.isolation_threshold_ma;
       const currency = cfg.currency || "KES";
       document.getElementById("currency-label").textContent = currency;
       document.getElementById("blynk-status").textContent = cfg.token_set
@@ -93,6 +98,7 @@
       const body = {
         tariff_kwh_cost: parseFloat(document.getElementById("tariff").value),
         alert_threshold_ma: parseFloat(document.getElementById("threshold").value),
+        isolation_threshold_ma: parseFloat(document.getElementById("isolation-threshold").value),
       };
       const res = await fetch("/api/config", {
         method: "POST",

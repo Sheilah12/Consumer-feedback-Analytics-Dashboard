@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.models import Alert, Reading
-from app.stream_fields import system_status_label
+from app.stream_fields import tier_for_status
 
 
 def _iso_utc(dt: datetime) -> str:
@@ -33,6 +33,7 @@ def reading_to_api(row: Reading | dict[str, Any]) -> dict[str, Any]:
         energy = row.energy_kwh
         alert_triggered = row.alert_triggered
         hardware_alert = row.hardware_alert
+        status = row.system_status
     else:
         ts = row.get("ts") or row["timestamp"]
         if isinstance(ts, str):
@@ -47,10 +48,11 @@ def reading_to_api(row: Reading | dict[str, Any]) -> dict[str, Any]:
         energy = row.get("energy_kwh_cumulative", row["energy_kwh"])
         alert_triggered = bool(row.get("alert_triggered", 0))
         hardware_alert = bool(row.get("hardware_alert", False))
+        status = str(row.get("system_status") or "normal")
 
     diff_a = float(diff_ma) / 1000.0
     ts_iso = _iso_utc(ts)
-    status = system_status_label(alert_triggered, hardware_alert)
+    tier = tier_for_status(status)
 
     return {
         "ts": ts_iso,
@@ -62,18 +64,20 @@ def reading_to_api(row: Reading | dict[str, Any]) -> dict[str, Any]:
         "real_power": _round4(real_power),
         "energy_kwh_cumulative": _round4(energy),
         "system_status": status,
+        "tier": tier,
         "alert_triggered": alert_triggered,
+        "hardware_alert": hardware_alert,
         # Legacy aliases
         "current_in": _round4(live),
         "current_out": _round4(neutral),
         "differential_current": _round4(diff_a),
         "differential_ma": round(float(diff_ma), 2),
         "energy_kwh": _round4(energy),
-        "hardware_alert": hardware_alert,
     }
 
 
 def alert_to_api(alert: Alert) -> dict[str, Any]:
+    status = alert.system_status or "alert"
     return {
         "id": alert.id,
         "ts": _iso_utc(alert.timestamp),
@@ -83,5 +87,6 @@ def alert_to_api(alert: Alert) -> dict[str, Any]:
         "differential_current": _round4(alert.differential_ma / 1000.0),
         "message": alert.message,
         "acknowledged": alert.acknowledged,
-        "system_status": "alert",
+        "tier": alert.tier,
+        "system_status": status,
     }

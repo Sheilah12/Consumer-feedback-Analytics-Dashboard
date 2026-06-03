@@ -19,6 +19,7 @@ class Reading(BaseModel):
     energy_kwh_interval: float = 0.0
     alert_triggered: bool = False
     hardware_alert: bool = False
+    system_status: str = "normal"
 
 
 class ReadingCreate(BaseModel):
@@ -30,6 +31,8 @@ class ReadingCreate(BaseModel):
     energy_kwh_cumulative: float
     energy_kwh_interval: float
     alert_triggered: bool = False
+    hardware_alert: bool = False
+    system_status: str = "normal"
 
 
 class WebhookPayload(BaseModel):
@@ -38,7 +41,7 @@ class WebhookPayload(BaseModel):
     current_out: float
     real_power: float
     energy_kwh_cumulative: float
-    hardware_alert: bool = False
+    system_status: Optional[str] = None
     differential_ma: Optional[float] = None
     ts: Optional[datetime] = None
 
@@ -50,6 +53,8 @@ class Alert(BaseModel):
     message: str
     acknowledged: bool = False
     cleared_at: Optional[datetime] = None
+    tier: Optional[str] = None
+    system_status: Optional[str] = None
 
 
 class AlertAck(BaseModel):
@@ -103,11 +108,13 @@ class StatsSummary(BaseModel):
 
 class ConfigUpdate(BaseModel):
     alert_threshold_ma: Optional[float] = Field(None, ge=0)
+    isolation_threshold_ma: Optional[float] = Field(None, ge=0)
     tariff_kwh_cost: Optional[float] = Field(None, ge=0)
 
 
 class ConfigResponse(BaseModel):
     alert_threshold_ma: float
+    isolation_threshold_ma: float
     tariff_kwh_cost: float
     currency: str = "KES"
     token_set: bool = False

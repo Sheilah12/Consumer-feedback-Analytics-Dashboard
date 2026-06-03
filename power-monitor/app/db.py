@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS readings (
     real_power DOUBLE PRECISION,
     energy_kwh_cumulative DOUBLE PRECISION,
     energy_kwh_interval DOUBLE PRECISION,
-    alert_triggered BOOLEAN DEFAULT false
+    alert_triggered BOOLEAN DEFAULT false,
+    system_status TEXT,
+    hardware_alert BOOLEAN DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings (ts DESC);
 
@@ -36,7 +38,9 @@ CREATE TABLE IF NOT EXISTS alerts (
     differential_ma DOUBLE PRECISION,
     message TEXT,
     acknowledged BOOLEAN DEFAULT false,
-    cleared_at TIMESTAMPTZ
+    cleared_at TIMESTAMPTZ,
+    tier TEXT,
+    system_status TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts (ts DESC);
 
@@ -44,6 +48,23 @@ CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+"""
+
+MIGRATIONS = (
+    "ALTER TABLE readings ADD COLUMN IF NOT EXISTS system_status TEXT",
+    "ALTER TABLE readings ADD COLUMN IF NOT EXISTS hardware_alert BOOLEAN DEFAULT false",
+    "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS tier TEXT",
+    "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS system_status TEXT",
+)
+
+READING_SELECT = """
+    ts, voltage, current_in, current_out, differential_ma,
+    real_power, energy_kwh_cumulative, energy_kwh_interval,
+    alert_triggered, system_status, hardware_alert
+"""
+
+ALERT_SELECT = """
+    id, ts, differential_ma, message, acknowledged, cleared_at, tier, system_status
 """
 
 
@@ -71,9 +92,12 @@ async def ensure_schema() -> None:
     """Idempotent schema + default config seed (safe on cold start)."""
     async with connect() as conn:
         await conn.execute(SCHEMA)
+        for stmt in MIGRATIONS:
+            await conn.execute(stmt)
         defaults = {
             "tariff_kwh_cost": str(settings.tariff_kwh_cost),
             "alert_threshold_ma": str(settings.alert_threshold_ma),
+            "isolation_threshold_ma": str(settings.isolation_threshold_ma),
         }
         for key, value in defaults.items():
             await conn.execute(
@@ -111,6 +135,26 @@ async def get_tariff() -> float:
 async def get_alert_threshold_ma() -> float:
     raw = await get_setting("alert_threshold_ma", str(settings.alert_threshold_ma))
     return float(raw)
+
+
+async def get_isolation_threshold_ma() -> float:
+    raw = await get_setting("isolation_threshold_ma", str(settings.isolation_threshold_ma))
+    return float(raw)
+
+
+async def get_latest_system_status() -> Optional[str]:
+    async with connect() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT system_status
+            FROM readings
+            ORDER BY ts DESC, id DESC
+            LIMIT 1
+            """
+        )
+    if not row or row["system_status"] is None:
+        return None
+    return str(row["system_status"])
 
 
 async def get_previous_cumulative() -> Optional[float]:
@@ -152,8 +196,9 @@ async def insert_reading(data: ReadingCreate, ts: Optional[datetime] = None) -> 
             """
             INSERT INTO readings (
                 ts, voltage, current_in, current_out, differential_ma,
-                real_power, energy_kwh_cumulative, energy_kwh_interval, alert_triggered
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                real_power, energy_kwh_cumulative, energy_kwh_interval,
+                alert_triggered, system_status, hardware_alert
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
             """,
             ts,
@@ -165,6 +210,8 @@ async def insert_reading(data: ReadingCreate, ts: Optional[datetime] = None) -> 
             data.energy_kwh_cumulative,
             data.energy_kwh_interval,
             data.alert_triggered,
+            data.system_status,
+            data.hardware_alert,
         )
     return int(row["id"])
 
@@ -172,6 +219,9 @@ async def insert_reading(data: ReadingCreate, ts: Optional[datetime] = None) -> 
 async def insert_alert(
     differential_ma: float,
     message: str,
+    *,
+    tier: str,
+    system_status: str,
     ts: Optional[datetime] = None,
 ) -> int:
     await ensure_schema()
@@ -179,13 +229,15 @@ async def insert_alert(
     async with connect() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO alerts (ts, differential_ma, message, acknowledged)
-            VALUES ($1, $2, $3, false)
+            INSERT INTO alerts (ts, differential_ma, message, acknowledged, tier, system_status)
+            VALUES ($1, $2, $3, false, $4, $5)
             RETURNING id
             """,
             ts,
             differential_ma,
             message,
+            tier,
+            system_status,
         )
     return int(row["id"])
 
@@ -193,9 +245,8 @@ async def insert_alert(
 async def get_latest_reading() -> Optional[Reading]:
     async with connect() as conn:
         row = await conn.fetchrow(
-            """
-            SELECT ts, voltage, current_in, current_out, differential_ma,
-                   real_power, energy_kwh_cumulative, energy_kwh_interval, alert_triggered
+            f"""
+            SELECT {READING_SELECT}
             FROM readings
             ORDER BY ts DESC, id DESC
             LIMIT 1
@@ -215,9 +266,8 @@ async def get_last_ingest_ts() -> Optional[datetime]:
 async def get_readings_since(hours: int = 24, limit: int = 5000) -> list[Reading]:
     async with connect() as conn:
         rows = await conn.fetch(
-            """
-            SELECT ts, voltage, current_in, current_out, differential_ma,
-                   real_power, energy_kwh_cumulative, energy_kwh_interval, alert_triggered
+            f"""
+            SELECT {READING_SELECT}
             FROM readings
             WHERE ts >= now() - ($1::text || ' hours')::interval
             ORDER BY ts ASC
@@ -285,8 +335,7 @@ async def get_readings_paginated(
     async with connect() as conn:
         rows = await conn.fetch(
             f"""
-            SELECT ts, voltage, current_in, current_out, differential_ma,
-                   real_power, energy_kwh_cumulative, energy_kwh_interval, alert_triggered
+            SELECT {READING_SELECT}
             FROM readings
             {where}
             ORDER BY ts DESC
@@ -432,8 +481,8 @@ async def get_alerts_paginated(
     async with connect() as conn:
         if acknowledged is None:
             rows = await conn.fetch(
-                """
-                SELECT id, ts, differential_ma, message, acknowledged, cleared_at
+                f"""
+                SELECT {ALERT_SELECT}
                 FROM alerts
                 ORDER BY id DESC
                 LIMIT $1 OFFSET $2
@@ -443,8 +492,8 @@ async def get_alerts_paginated(
             )
         else:
             rows = await conn.fetch(
-                """
-                SELECT id, ts, differential_ma, message, acknowledged, cleared_at
+                f"""
+                SELECT {ALERT_SELECT}
                 FROM alerts
                 WHERE acknowledged = $1
                 ORDER BY id DESC
@@ -570,7 +619,8 @@ def _row_to_reading(row: asyncpg.Record) -> Reading:
         energy_kwh=float(row["energy_kwh_cumulative"]),
         energy_kwh_interval=float(row["energy_kwh_interval"] or 0),
         alert_triggered=bool(row["alert_triggered"]),
-        hardware_alert=False,
+        hardware_alert=bool(row["hardware_alert"]),
+        system_status=str(row["system_status"] or "normal"),
     )
 
 
@@ -582,4 +632,6 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         message=row["message"],
         acknowledged=bool(row["acknowledged"]),
         cleared_at=row["cleared_at"],
+        tier=row["tier"],
+        system_status=row["system_status"],
     )

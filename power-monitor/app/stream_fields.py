@@ -1,4 +1,4 @@
-"""Blynk / API field names for the seven data streams + device timestamp."""
+"""Blynk / API field names and two-tier system_status resolution."""
 
 from __future__ import annotations
 
@@ -14,6 +14,13 @@ STREAM_REAL_POWER = "real_power"
 STREAM_ENERGY = "energy_kwh_cumulative"
 STREAM_SYSTEM_STATUS = "system_status"
 STREAM_TS = "ts"
+
+SYSTEM_NORMAL = "normal"
+SYSTEM_ALERT = "alert"
+SYSTEM_ISOLATED = "isolated"
+
+TIER_INVESTIGATION = "investigation"
+TIER_ISOLATION = "isolation"
 
 
 def pick_float(data: dict[str, Any], *keys: str) -> Optional[float]:
@@ -37,25 +44,6 @@ def parse_device_ts(data: dict[str, Any]) -> Optional[datetime]:
     return dt.astimezone(timezone.utc)
 
 
-def parse_system_status(raw: Any) -> bool:
-    """True when device reports alert / theft / fault."""
-    if raw is None or raw == "":
-        return False
-    if isinstance(raw, (int, float)):
-        return float(raw) >= 0.5
-    text = str(raw).strip().lower()
-    return text in (
-        "alert",
-        "theft",
-        "fault",
-        "abnormal",
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-
-
 def differential_to_ma(value: float) -> float:
     """Device may send differential in A (< ~5) or mA."""
     if abs(value) < 5:
@@ -63,7 +51,95 @@ def differential_to_ma(value: float) -> float:
     return abs(value)
 
 
-def system_status_label(alert_triggered: bool, hardware_alert: bool = False) -> str:
-    if alert_triggered or hardware_alert:
-        return "alert"
-    return "normal"
+def map_device_status(raw: Any) -> str:
+    """Map device-reported status to normal | alert | isolated."""
+    if raw is None or raw == "":
+        return SYSTEM_NORMAL
+    if isinstance(raw, (int, float)):
+        if float(raw) >= 2:
+            return SYSTEM_ISOLATED
+        if float(raw) >= 0.5:
+            return SYSTEM_ALERT
+        return SYSTEM_NORMAL
+    text = str(raw).strip().lower().replace("-", " ").replace("/", " ")
+    if text in (SYSTEM_ISOLATED, "isolation", "theft", "trip", "tripped", "fault"):
+        return SYSTEM_ISOLATED
+    if text in (
+        SYSTEM_ALERT,
+        "investigation",
+        "investigate",
+        "warning",
+        "suspect",
+        "abnormal",
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return SYSTEM_ALERT
+    return SYSTEM_NORMAL
+
+
+def derive_status_from_differential(
+    differential_ma: float,
+    alert_threshold_ma: float,
+    isolation_threshold_ma: float,
+) -> str:
+    """Cloud backstop when device omits system_status."""
+    if differential_ma >= isolation_threshold_ma:
+        return SYSTEM_ISOLATED
+    if differential_ma >= alert_threshold_ma:
+        return SYSTEM_ALERT
+    return SYSTEM_NORMAL
+
+
+def resolve_system_status(
+    device_raw: Any,
+    differential_ma: float,
+    alert_threshold_ma: float,
+    isolation_threshold_ma: float,
+) -> tuple[str, bool]:
+    """
+    Device status is authoritative when present; otherwise derive from differential bands.
+    hardware_alert is True only for isolated (relay tripped at device).
+    """
+    if device_raw is not None and device_raw != "":
+        status = map_device_status(device_raw)
+    else:
+        status = derive_status_from_differential(
+            differential_ma, alert_threshold_ma, isolation_threshold_ma
+        )
+    hardware_alert = status == SYSTEM_ISOLATED
+    return status, hardware_alert
+
+
+def tier_for_status(status: str) -> Optional[str]:
+    if status == SYSTEM_ALERT:
+        return TIER_INVESTIGATION
+    if status == SYSTEM_ISOLATED:
+        return TIER_ISOLATION
+    return None
+
+
+def status_severity(status: str) -> int:
+    return {SYSTEM_NORMAL: 0, SYSTEM_ALERT: 1, SYSTEM_ISOLATED: 2}.get(status, 0)
+
+
+def is_tier_transition(previous: Optional[str], current: str) -> bool:
+    """True when entering alert or isolated from a lower severity."""
+    if current not in (SYSTEM_ALERT, SYSTEM_ISOLATED):
+        return False
+    prev = previous or SYSTEM_NORMAL
+    return status_severity(current) > status_severity(prev)
+
+
+def alert_message(status: str, differential_ma: float, tier: str) -> str:
+    if status == SYSTEM_ISOLATED:
+        return (
+            f"Power theft isolation: differential {differential_ma:.0f} mA — "
+            "relay tripped; manual reset required at device"
+        )
+    return (
+        f"Investigation alert: differential {differential_ma:.0f} mA — "
+        "human review required, no disconnection"
+    )

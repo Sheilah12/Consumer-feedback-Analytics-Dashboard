@@ -34,12 +34,14 @@
 
   function systemStatus(r) {
     if (r.system_status) return String(r.system_status).toLowerCase();
-    if (r.alert_triggered || r.hardware_alert) return "alert";
+    if (r.hardware_alert) return "isolated";
+    if (r.alert_triggered) return "alert";
     return "normal";
   }
 
   function isAlertReading(r) {
-    return systemStatus(r) === "alert" || Boolean(r.alert_triggered);
+    const st = systemStatus(r);
+    return st === "alert" || st === "isolated" || Boolean(r.alert_triggered);
   }
 
   function hasReadingData(r) {

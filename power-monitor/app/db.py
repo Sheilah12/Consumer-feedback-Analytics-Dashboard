@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Optional
 import asyncpg
 
 from app.config import settings
-from app.models import Alert, DailyBucket, HourlyBucket, Reading, ReadingCreate
+from app.models import Alert, DailyBucket, HourlyBucket, Reading, ReadingCreate, WeeklyBucket
 
 logger = logging.getLogger(__name__)
 
@@ -563,6 +563,179 @@ async def delete_alerts() -> int:
     return int(result.split()[-1])
 
 
+def _pct_change(current: float, previous: float) -> Optional[float]:
+    if previous <= 0:
+        return None if current <= 0 else 100.0
+    return round(((current - previous) / previous) * 100.0, 2)
+
+
+async def get_readings_weekly(weeks: int = 8) -> list[WeeklyBucket]:
+    weeks = max(1, min(weeks, 52))
+    async with connect() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                date_trunc('week', ts)::date AS week_start,
+                COALESCE(SUM(energy_kwh_interval), 0) AS energy_kwh,
+                AVG(real_power) AS avg_power,
+                MAX(GREATEST(current_in, current_out)) AS peak_current
+            FROM readings
+            WHERE ts >= date_trunc('week', now()) - (($1::int - 1) * interval '1 week')
+            GROUP BY 1
+            ORDER BY week_start ASC
+            """,
+            weeks,
+        )
+
+    return [
+        WeeklyBucket(
+            week_start=row["week_start"].isoformat(),
+            energy_kwh=round(float(row["energy_kwh"]), 4),
+            avg_power=round(float(row["avg_power"] or 0), 4),
+            peak_current=round(float(row["peak_current"] or 0), 4),
+        )
+        for row in rows
+    ]
+
+
+async def get_spike_analysis(
+    *,
+    recent_hours: int = 48,
+    baseline_days: int = 7,
+    from_iso: Optional[str] = None,
+    to_iso: Optional[str] = None,
+) -> dict[str, Any]:
+    """Fetch recent readings and baselines for spike detection."""
+    from_dt = _parse_iso(from_iso) if from_iso else None
+    to_dt = _parse_iso(to_iso) if to_iso else None
+
+    async with connect() as conn:
+        if from_dt and to_dt:
+            recent_rows = await conn.fetch(
+                f"""
+                SELECT ts, real_power,
+                       EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC')::int AS hour_of_day
+                FROM readings
+                WHERE ts >= $1 AND ts <= $2
+                ORDER BY ts ASC
+                """,
+                from_dt,
+                to_dt,
+            )
+            baseline_rows = await conn.fetch(
+                """
+                SELECT real_power
+                FROM readings
+                WHERE ts >= $1 - ($2::text || ' days')::interval
+                  AND ts < $1
+                """,
+                from_dt,
+                str(baseline_days),
+            )
+            hod_rows = await conn.fetch(
+                """
+                SELECT
+                    EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC')::int AS hour_of_day,
+                    AVG(real_power) AS avg_power
+                FROM readings
+                WHERE ts >= $1 - interval '30 days'
+                  AND ts < $1
+                GROUP BY 1
+                """,
+                from_dt,
+            )
+        else:
+            recent_rows = await conn.fetch(
+                f"""
+                SELECT ts, real_power,
+                       EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC')::int AS hour_of_day
+                FROM readings
+                WHERE ts >= now() - ($1::text || ' hours')::interval
+                ORDER BY ts ASC
+                """,
+                str(recent_hours),
+            )
+            baseline_rows = await conn.fetch(
+                """
+                SELECT real_power
+                FROM readings
+                WHERE ts >= now() - ($1::text || ' days')::interval
+                  AND ts < now() - interval '24 hours'
+                """,
+                str(baseline_days),
+            )
+            hod_rows = await conn.fetch(
+                """
+                SELECT
+                    EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC')::int AS hour_of_day,
+                    AVG(real_power) AS avg_power
+                FROM readings
+                WHERE ts >= now() - interval '30 days'
+                  AND ts < now() - interval '24 hours'
+                GROUP BY 1
+                """,
+            )
+
+    recent = [
+        {
+            "ts": row["ts"],
+            "real_power": float(row["real_power"]),
+            "hour_of_day": int(row["hour_of_day"]),
+        }
+        for row in recent_rows
+    ]
+    baseline_values = [float(r["real_power"]) for r in baseline_rows]
+    hod_avg = {int(r["hour_of_day"]): float(r["avg_power"]) for r in hod_rows}
+
+    return {
+        "recent": recent,
+        "baseline_values": baseline_values,
+        "hod_avg": hod_avg,
+    }
+
+
+async def get_energy_tip_inputs() -> dict[str, Any]:
+    """Aggregates for rule-based energy-saving tips."""
+    async with connect() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                (
+                    SELECT COALESCE(AVG(real_power), 0)
+                    FROM readings
+                    WHERE ts >= now() - interval '7 days'
+                      AND EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC') BETWEEN 0 AND 5
+                ) AS overnight_avg_power,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= now() - interval '7 days'
+                      AND EXTRACT(HOUR FROM ts AT TIME ZONE 'UTC') BETWEEN 18 AND 21
+                ) AS evening_peak_kwh,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= date_trunc('week', now())
+                ) AS kwh_this_week,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= date_trunc('week', now()) - interval '1 week'
+                      AND ts < date_trunc('week', now())
+                ) AS kwh_last_week
+            """
+        )
+
+    kwh_this_week = float(row["kwh_this_week"] or 0)
+    kwh_last_week = float(row["kwh_last_week"] or 0)
+    return {
+        "overnight_avg_power": round(float(row["overnight_avg_power"] or 0), 2),
+        "evening_peak_kwh": round(float(row["evening_peak_kwh"] or 0), 4),
+        "total_week_kwh": round(kwh_this_week, 4),
+        "pct_change_week": _pct_change(kwh_this_week, kwh_last_week),
+    }
+
+
 async def get_stats_summary(tariff_kes: float, uptime_pct: float) -> dict[str, Any]:
     async with connect() as conn:
         row = await conn.fetchrow(
@@ -582,18 +755,45 @@ async def get_stats_summary(tariff_kes: float, uptime_pct: float) -> dict[str, A
                     SELECT COUNT(*)
                     FROM alerts
                     WHERE (ts AT TIME ZONE 'UTC')::date = (now() AT TIME ZONE 'UTC')::date
-                ) AS alert_count_today
+                ) AS alert_count_today,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= date_trunc('week', now())
+                ) AS kwh_this_week,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= date_trunc('week', now()) - interval '1 week'
+                      AND ts < date_trunc('week', now())
+                ) AS kwh_last_week,
+                (
+                    SELECT COALESCE(SUM(energy_kwh_interval), 0)
+                    FROM readings
+                    WHERE ts >= date_trunc('month', now()) - interval '1 month'
+                      AND ts < date_trunc('month', now())
+                ) AS kwh_last_month
             """
         )
 
     today_kwh = round(float(row["today_kwh"] or 0), 4)
     month_kwh = round(float(row["month_kwh"] or 0), 4)
+    kwh_this_week = round(float(row["kwh_this_week"] or 0), 4)
+    kwh_last_week = round(float(row["kwh_last_week"] or 0), 4)
+    kwh_last_month = round(float(row["kwh_last_month"] or 0), 4)
+
     return {
         "today_kwh": today_kwh,
         "month_kwh": month_kwh,
         "month_cost_kes": round(month_kwh * tariff_kes, 2),
         "alert_count_today": int(row["alert_count_today"] or 0),
         "uptime_pct": round(uptime_pct, 2),
+        "kwh_this_week": kwh_this_week,
+        "kwh_last_week": kwh_last_week,
+        "pct_change_week": _pct_change(kwh_this_week, kwh_last_week),
+        "kwh_this_month": month_kwh,
+        "kwh_last_month": kwh_last_month,
+        "pct_change_month": _pct_change(month_kwh, kwh_last_month),
     }
 
 

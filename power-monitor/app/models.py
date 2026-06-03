@@ -98,12 +98,41 @@ class DailyBucket(BaseModel):
     sample_count: int
 
 
+class WeeklyBucket(BaseModel):
+    week_start: str
+    energy_kwh: float
+    avg_power: float
+    peak_current: float
+
+
+class PowerSpike(BaseModel):
+    ts: str
+    real_power: float
+    baseline_mean: float
+    baseline_std: float
+    hour_of_day_avg: float
+    excess_w: float
+    pct_above_normal: float
+    reason: str
+
+
+class EnergyTip(BaseModel):
+    text: str
+    severity: str
+
+
 class StatsSummary(BaseModel):
     today_kwh: float
     month_kwh: float
     month_cost_kes: float
     alert_count_today: int
     uptime_pct: float
+    kwh_this_week: float = 0.0
+    kwh_last_week: float = 0.0
+    pct_change_week: Optional[float] = None
+    kwh_this_month: float = 0.0
+    kwh_last_month: float = 0.0
+    pct_change_month: Optional[float] = None
 
 
 class ConfigUpdate(BaseModel):

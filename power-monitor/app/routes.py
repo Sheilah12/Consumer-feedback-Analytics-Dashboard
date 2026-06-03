@@ -14,19 +14,23 @@ from app import db, ingest
 from app.api_serializers import alert_to_api, reading_to_api
 from app.config import settings
 from app.budget_cap import compute_budget_cap
+from app.energy_tips import generate_energy_tips
 from app.models import (
     AlertAck,
     BudgetCapResponse,
     BudgetEstimate,
     ConfigResponse,
     ConfigUpdate,
+    EnergyTip,
     HealthResponse,
     PaginatedAlerts,
     PaginatedReadings,
+    PowerSpike,
     SettingsResponse,
     SettingsUpdate,
     StatsSummary,
 )
+from app.spike_detection import compute_baseline_stats, detect_spikes
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +207,68 @@ async def api_readings_daily(
     to_iso = _parse_iso8601(to, "to") if to else None
     buckets = await db.get_readings_daily(from_iso=from_iso, to_iso=to_iso)
     return _cached([b.model_dump() for b in buckets], max_age=30)
+
+
+@app.get("/api/readings/weekly")
+async def api_readings_weekly(
+    weeks: int = Query(8, ge=1, le=52),
+) -> JSONResponse:
+    buckets = await db.get_readings_weekly(weeks=weeks)
+    return _cached([b.model_dump() for b in buckets], max_age=60)
+
+
+@app.get("/api/readings/spikes")
+async def api_readings_spikes(
+    hours: int = Query(48, ge=1, le=168),
+    from_: Optional[str] = Query(None, alias="from"),
+    to: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+) -> JSONResponse:
+    from_iso = _parse_iso8601(from_, "from") if from_ else None
+    to_iso = _parse_iso8601(to, "to") if to else None
+    analysis = await db.get_spike_analysis(
+        recent_hours=hours,
+        from_iso=from_iso,
+        to_iso=to_iso,
+    )
+    mean, std = compute_baseline_stats(analysis["baseline_values"])
+    spikes = detect_spikes(
+        analysis["recent"],
+        baseline_mean=mean,
+        baseline_std=std,
+        hod_avg=analysis["hod_avg"],
+    )[:limit]
+    return _cached([PowerSpike(**s).model_dump() for s in spikes], max_age=30)
+
+
+@app.get("/api/energy/tips")
+async def api_energy_tips() -> JSONResponse:
+    inputs = await db.get_energy_tip_inputs()
+    now = datetime.now(timezone.utc)
+    month_kwh = await db.get_month_to_date_kwh()
+    tariff = await db.get_tariff()
+    budget = await db.get_monthly_budget_kes()
+    cap = compute_budget_cap(
+        now=now,
+        month_to_date_kwh=month_kwh,
+        tariff_kwh_cost=tariff,
+        monthly_budget_kes=budget,
+    )
+    days_left = max(1, cap["days_remaining"])
+    daily_reduction = 0.0
+    if not cap["on_track"] and cap["projected_overage"] > 0 and tariff > 0:
+        daily_reduction = cap["projected_overage"] / tariff / days_left
+
+    tips = generate_energy_tips(
+        overnight_avg_power=inputs["overnight_avg_power"],
+        evening_peak_kwh=inputs["evening_peak_kwh"],
+        total_week_kwh=inputs["total_week_kwh"],
+        pct_change_week=inputs["pct_change_week"],
+        budget_on_track=cap["on_track"],
+        projected_overage_kes=cap["projected_overage"],
+        daily_reduction_kwh=daily_reduction,
+    )
+    return _cached([EnergyTip(**t).model_dump() for t in tips], max_age=60)
 
 
 @app.get("/api/alerts", response_model=PaginatedAlerts)

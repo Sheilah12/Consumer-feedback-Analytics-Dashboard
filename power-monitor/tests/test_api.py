@@ -122,8 +122,45 @@ def test_stats_summary(client: TestClient):
     _seed(client)
     r = client.get("/api/stats/summary")
     assert r.status_code == 200
-    for key in ("today_kwh", "month_kwh", "month_cost_kes", "alert_count_today", "uptime_pct"):
+    for key in (
+        "today_kwh",
+        "month_kwh",
+        "month_cost_kes",
+        "alert_count_today",
+        "uptime_pct",
+        "kwh_this_week",
+        "kwh_last_week",
+        "pct_change_week",
+        "kwh_this_month",
+        "kwh_last_month",
+        "pct_change_month",
+    ):
         assert key in r.json()
+
+
+def test_readings_weekly(client: TestClient):
+    _seed(client)
+    r = client.get("/api/readings/weekly", params={"weeks": 8})
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_readings_spikes(client: TestClient):
+    _seed(client)
+    r = client.get("/api/readings/spikes", params={"hours": 48})
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_energy_tips(client: TestClient):
+    _seed(client)
+    r = client.get("/api/energy/tips")
+    assert r.status_code == 200
+    tips = r.json()
+    assert isinstance(tips, list)
+    if tips:
+        assert "text" in tips[0]
+        assert "severity" in tips[0]
 
 
 def test_budget_cap_endpoint(client: TestClient):

@@ -20,8 +20,10 @@
 
   let powerChart = null;
   let dailyChart = null;
+  let weeklyChart = null;
   let zoomEnabled = false;
   let powerSeries = [];
+  let spikeMarkers = [];
   let allReadings = [];
   let tablePage = 0;
   let heatmapGrid = [];
@@ -42,6 +44,11 @@
     exportCsv: document.getElementById("btn-export-csv"),
     heatCanvas: document.getElementById("heatmap-canvas"),
     heatTooltip: document.getElementById("heatmap-tooltip"),
+    benchWeekKwh: document.getElementById("bench-week-kwh"),
+    benchWeekPct: document.getElementById("bench-week-pct"),
+    benchMonthKwh: document.getElementById("bench-month-kwh"),
+    benchMonthPct: document.getElementById("bench-month-pct"),
+    tipsList: document.getElementById("tips-list"),
   };
 
   function pad2(n) {
@@ -138,6 +145,82 @@
     const res = await fetch(`/api/readings/daily?${qs}`);
     if (!res.ok) return [];
     return res.json();
+  }
+
+  async function fetchWeekly() {
+    const res = await fetch("/api/readings/weekly?weeks=8");
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  async function fetchSpikes(from, to) {
+    const qs = queryParams(from, to);
+    const res = await fetch(`/api/readings/spikes?${qs}&limit=100`);
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  async function fetchStatsSummary() {
+    const res = await fetch("/api/stats/summary");
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  async function fetchEnergyTips() {
+    const res = await fetch("/api/energy/tips");
+    if (!res.ok) return [];
+    return res.json();
+  }
+
+  function formatKwh(v) {
+    return `${Number(v).toFixed(2)} kWh`;
+  }
+
+  function formatPctChange(pct) {
+    if (pct == null || Number.isNaN(Number(pct))) return "—";
+    const n = Number(pct);
+    const sign = n > 0 ? "+" : "";
+    return `${sign}${n.toFixed(1)}%`;
+  }
+
+  function pctChangeClass(pct) {
+    if (pct == null || Number.isNaN(Number(pct))) return "hist-benchmark-card__change--flat";
+    const n = Number(pct);
+    if (n > 1) return "hist-benchmark-card__change--up";
+    if (n < -1) return "hist-benchmark-card__change--down";
+    return "hist-benchmark-card__change--flat";
+  }
+
+  function renderBenchmark(stats) {
+    if (!stats) return;
+    if (els.benchWeekKwh) {
+      els.benchWeekKwh.textContent = formatKwh(stats.kwh_this_week);
+    }
+    if (els.benchWeekPct) {
+      els.benchWeekPct.textContent = formatPctChange(stats.pct_change_week);
+      els.benchWeekPct.className = `hist-benchmark-card__change ${pctChangeClass(stats.pct_change_week)}`;
+    }
+    if (els.benchMonthKwh) {
+      els.benchMonthKwh.textContent = formatKwh(stats.kwh_this_month ?? stats.month_kwh);
+    }
+    if (els.benchMonthPct) {
+      els.benchMonthPct.textContent = formatPctChange(stats.pct_change_month);
+      els.benchMonthPct.className = `hist-benchmark-card__change ${pctChangeClass(stats.pct_change_month)}`;
+    }
+  }
+
+  function renderTips(tips) {
+    if (!els.tipsList) return;
+    if (!tips || !tips.length) {
+      els.tipsList.innerHTML = '<li class="hist-tip hist-tip--info">No tips available yet.</li>';
+      return;
+    }
+    els.tipsList.innerHTML = tips
+      .map((t) => {
+        const sev = t.severity === "alert" ? "alert" : t.severity === "warn" ? "warn" : "info";
+        return `<li class="hist-tip hist-tip--${sev}">${t.text}</li>`;
+      })
+      .join("");
   }
 
   function registerZoomPlugin() {
@@ -239,6 +322,19 @@
               tension: 0.2,
               pointRadius: 0,
               borderWidth: 2,
+              order: 2,
+            },
+            {
+              type: "scatter",
+              label: "Spikes",
+              data: [],
+              borderColor: palette.amber,
+              backgroundColor: palette.amber,
+              pointRadius: 6,
+              pointHoverRadius: 8,
+              pointStyle: "triangle",
+              showLine: false,
+              order: 1,
             },
           ],
         },
@@ -299,27 +395,142 @@
     }
   }
 
+  function initWeeklyChart() {
+    if (typeof Chart === "undefined" || weeklyChart) return;
+    const ctx = document.getElementById("chart-weekly");
+    if (!ctx) return;
+
+    try {
+      weeklyChart = new Chart(ctx, {
+        type: "bar",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { labels: { color: palette.muted } } },
+          scales: {
+            x: { ticks: { color: palette.muted, maxTicksLimit: 8 }, grid: { display: false } },
+            y: {
+              position: "left",
+              beginAtZero: true,
+              title: { display: true, text: "Energy (kWh)", color: palette.muted },
+              ticks: { color: palette.muted },
+              grid: { color: palette.grid },
+            },
+            y1: {
+              position: "right",
+              beginAtZero: true,
+              title: { display: true, text: "Avg Power (W)", color: palette.amber },
+              ticks: { color: palette.amber },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
+      });
+    } catch (err) {
+      console.error("[history] weekly chart init failed", err);
+      weeklyChart = null;
+    }
+  }
+
   function ensureCharts() {
     initPowerChart();
     initDailyChart();
+    initWeeklyChart();
   }
 
-  function updatePowerChart(readings) {
+  function readingTs(r) {
+    return RF.readingTs ? RF.readingTs(r) : r.timestamp || r.ts;
+  }
+
+  function buildSpikePoints(readings, spikes) {
+    if (!spikes.length || !readings.length) return [];
+    const tsIndex = new Map(
+      readings.map((r, i) => [new Date(readingTs(r)).getTime(), i])
+    );
+    const points = [];
+    spikes.forEach((sp) => {
+      const t = new Date(sp.ts).getTime();
+      let idx = tsIndex.get(t);
+      if (idx == null) {
+        let best = -1;
+        let bestDiff = Infinity;
+        readings.forEach((r, i) => {
+          const diff = Math.abs(new Date(readingTs(r)).getTime() - t);
+          if (diff < bestDiff && diff < 120_000) {
+            bestDiff = diff;
+            best = i;
+          }
+        });
+        idx = best;
+      }
+      if (idx >= 0) {
+        points.push({ x: idx, y: Number(sp.real_power) || 0 });
+      }
+    });
+    return points;
+  }
+
+  function updatePowerChart(readings, spikes) {
     ensureCharts();
     if (!powerChart) return;
 
     powerSeries = readings;
+    spikeMarkers = spikes || [];
     const points = readings.map((r, i) => ({
       x: i,
       y: Number(r.real_power) || 0,
     }));
+    const spikePoints = buildSpikePoints(readings, spikeMarkers);
 
     powerChart.data.datasets[0].data = points;
+    if (powerChart.data.datasets[1]) {
+      powerChart.data.datasets[1].data = spikePoints;
+    }
     const maxX = Math.max(points.length - 1, 1);
     powerChart.options.scales.x.min = 0;
     powerChart.options.scales.x.max = maxX;
     powerChart.update("none");
     powerChart.resize();
+  }
+
+  function updateWeeklyChart(weekly) {
+    ensureCharts();
+    if (!weeklyChart || !weekly.length) return;
+
+    const labels = weekly.map((w) => {
+      const dt = new Date(w.week_start + "T12:00:00Z");
+      return dt.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
+    });
+    const energy = weekly.map((w) => Number(w.energy_kwh) || 0);
+    const avgPower = weekly.map((w) => Number(w.avg_power) || 0);
+
+    weeklyChart.data.labels = labels;
+    weeklyChart.data.datasets = [
+      {
+        type: "bar",
+        label: "Energy (kWh)",
+        data: energy,
+        backgroundColor: "rgba(21, 101, 192, 0.75)",
+        yAxisID: "y",
+        order: 2,
+        minBarLength: 4,
+      },
+      {
+        type: "line",
+        label: "Avg Power (W)",
+        data: avgPower,
+        borderColor: palette.amber,
+        backgroundColor: "transparent",
+        yAxisID: "y1",
+        tension: 0.2,
+        pointRadius: 3,
+        order: 1,
+      },
+    ];
+    weeklyChart.update("none");
+    weeklyChart.resize();
   }
 
   /** Row keys use UTC dates to match Postgres `date(ts)` in the API. */
@@ -625,19 +836,26 @@
     setLoading(true);
 
     try {
-      const [readings, hourly, daily] = await Promise.all([
+      const [readings, hourly, daily, weekly, spikes, stats, tips] = await Promise.all([
         fetchReadings(from, to),
         fetchHourly(from, to),
         fetchDaily(from, to),
+        fetchWeekly(),
+        fetchSpikes(from, to),
+        fetchStatsSummary(),
+        fetchEnergyTips(),
       ]);
 
       if (seq !== loadSeq) return;
 
       allReadings = readings;
       tablePage = 0;
-      updatePowerChart(readings);
+      updatePowerChart(readings, spikes);
+      updateWeeklyChart(weekly);
       buildHeatmapGrid(hourly, els.to.value);
       updateDailyChart(daily);
+      renderBenchmark(stats);
+      renderTips(tips);
       renderTable();
     } catch (e) {
       console.error("[history]", e);
@@ -687,6 +905,7 @@
         drawHeatmap();
         powerChart?.resize();
         dailyChart?.resize();
+        weeklyChart?.resize();
       }, 150);
     });
 
@@ -696,6 +915,7 @@
         drawHeatmap();
         powerChart?.resize();
         dailyChart?.resize();
+        weeklyChart?.resize();
       }, 220);
     });
   });

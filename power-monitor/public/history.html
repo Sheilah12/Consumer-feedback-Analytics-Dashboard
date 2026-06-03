@@ -26,14 +26,33 @@
         <a href="/detection"><span class="sidebar__nav-icon">⚡</span> Detection</a>
         <a href="/settings"><span class="sidebar__nav-icon">⚙</span> Settings</a>
       </nav>
-      <div class="sidebar__footer">Neon Postgres · REST API</div>
+      <div class="sidebar__footer">Weekly trends · Spike markers · Tips</div>
     </aside>
 
     <main class="main-content">
       <header class="hist-header">
         <h1>Consumption History</h1>
-        <p>Power trends, hourly heatmap, daily totals, and raw readings export</p>
+        <p>Power trends, weekly benchmarks, spike markers, and energy-saving tips</p>
       </header>
+
+      <section class="hist-insights">
+        <div class="hist-benchmark-card" id="benchmark-week">
+          <div class="hist-benchmark-card__label">This week vs last week</div>
+          <div class="hist-benchmark-card__value" id="bench-week-kwh">—</div>
+          <div class="hist-benchmark-card__change" id="bench-week-pct">—</div>
+        </div>
+        <div class="hist-benchmark-card" id="benchmark-month">
+          <div class="hist-benchmark-card__label">This month vs last month</div>
+          <div class="hist-benchmark-card__value" id="bench-month-kwh">—</div>
+          <div class="hist-benchmark-card__change" id="bench-month-pct">—</div>
+        </div>
+        <div class="hist-tips-panel" id="tips-panel">
+          <div class="hist-tips-panel__title">Energy-saving tips</div>
+          <ul class="hist-tips-list" id="tips-list">
+            <li class="hist-tip hist-tip--info">Loading tips…</li>
+          </ul>
+        </div>
+      </section>
 
       <div class="date-range-bar">
         <div class="date-field">
@@ -49,9 +68,17 @@
 
       <section class="hist-chart-card">
         <div class="hist-chart-card__title">Power Over Time</div>
-        <div class="hist-chart-card__hint">Scroll or pinch to zoom · double-click to reset</div>
+        <div class="hist-chart-card__hint">Scroll or pinch to zoom · orange markers = detected spikes · double-click to reset</div>
         <div class="hist-chart-wrap">
           <canvas id="chart-power"></canvas>
+        </div>
+      </section>
+
+      <section class="hist-chart-card">
+        <div class="hist-chart-card__title">Weekly Totals</div>
+        <div class="hist-chart-card__hint">Last 8 weeks · energy (kWh) bars and average power (W) trend</div>
+        <div class="hist-chart-wrap">
+          <canvas id="chart-weekly"></canvas>
         </div>
       </section>
 
@@ -112,6 +139,6 @@
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
   <script src="/js/reading-fields.js"></script>
-  <script src="/js/history.js?v=6"></script>
+  <script src="/js/history.js?v=7"></script>
 </body>
 </html>

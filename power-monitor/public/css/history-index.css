@@ -299,6 +299,106 @@ table.hist-table tbody tr:hover td {
   cursor: not-allowed;
 }
 
+.hist-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.hist-benchmark-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  box-shadow: var(--shadow-card);
+}
+
+.hist-benchmark-card__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.hist-benchmark-card__value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-benchmark-card__change {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-benchmark-card__change--up {
+  color: var(--color-alert-red);
+}
+
+.hist-benchmark-card__change--down {
+  color: var(--color-ok-green);
+}
+
+.hist-benchmark-card__change--flat {
+  color: var(--color-text-muted);
+}
+
+.hist-tips-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  box-shadow: var(--shadow-card);
+}
+
+.hist-tips-panel__title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.hist-tips-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hist-tip {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border-left: 3px solid var(--color-blue);
+  background: rgba(21, 101, 192, 0.06);
+}
+
+.hist-tip--warn {
+  border-left-color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.hist-tip--alert {
+  border-left-color: var(--color-alert-red);
+  background: var(--color-alert-bg);
+}
+
+@media (max-width: 960px) {
+  .hist-insights {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   body.history-page .main-content {
     margin-left: 0;

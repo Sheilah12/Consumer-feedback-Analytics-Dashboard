@@ -24,13 +24,13 @@
         <a href="/alerts"><span class="sidebar__nav-icon">⚠</span> Alerts</a>
         <a href="/settings" class="active"><span class="sidebar__nav-icon">⚙</span> Settings</a>
       </nav>
-      <div class="sidebar__footer">Restart app after .env token change</div>
+      <div class="sidebar__footer">Tariff &amp; thresholds · Neon Postgres</div>
     </aside>
     <main class="main-content">
       <header class="page-header">
         <div>
           <h1>Configuration</h1>
-          <p class="subtitle">Thresholds and tariff (Blynk token is set via server <code class="mono">.env</code>)</p>
+          <p class="subtitle">Tariff and alert threshold (stored in Neon). Set <code class="mono">BLYNK_TOKEN</code> and <code class="mono">INGEST_SECRET</code> in Vercel project environment variables.</p>
         </div>
         <span class="badge" id="mode-badge">—</span>
       </header>
@@ -38,16 +38,20 @@
       <section class="settings-panel">
         <form id="settings-form">
           <div class="form-group">
-            <label for="tariff">Tariff ($/kWh)</label>
+            <label for="tariff">Tariff (<span id="currency-label">KES</span>/kWh)</label>
             <input type="number" id="tariff" name="tariff_kwh_cost" min="0" step="0.0001" required />
           </div>
           <div class="form-group">
             <label for="threshold">Alert threshold (mA)</label>
             <input type="number" id="threshold" name="alert_threshold_ma" min="0" step="1" required />
           </div>
+          <div class="form-group">
+            <label for="admin-token">Admin token (optional)</label>
+            <input type="password" id="admin-token" name="admin_token" autocomplete="off" placeholder="Matches Vercel ADMIN_TOKEN for save / ack" />
+            <p class="subtitle" style="margin-top:0.35rem">Stored in this browser session only. Required when the server has <code class="mono">ADMIN_TOKEN</code> set.</p>
+          </div>
           <p class="subtitle" style="margin-bottom:1rem">
-            Blynk token: <span id="blynk-status">—</span><br />
-            Poll interval: <span id="poll-interval" class="mono">—</span>s
+            Blynk REST token: <span id="blynk-status">—</span>
           </p>
           <button type="submit" class="btn btn--primary">Save settings</button>
           <span id="save-msg" class="subtitle" style="margin-left:0.75rem"></span>
@@ -55,44 +59,64 @@
       </section>
     </main>
   </div>
+  <script src="/js/admin-auth.js"></script>
   <script>
+    const AA = window.AdminAuth;
+
+    function bindAdminTokenField() {
+      const input = document.getElementById("admin-token");
+      if (!input || !AA) return;
+      input.value = AA.getAdminToken();
+      input.addEventListener("change", () => AA.setAdminToken(input.value));
+      input.addEventListener("blur", () => AA.setAdminToken(input.value));
+    }
+
     async function loadSettings() {
-      const res = await fetch("/api/settings");
+      const res = await fetch("/api/config");
       if (!res.ok) return;
-      const s = await res.json();
-      document.getElementById("tariff").value = s.tariff_kwh_cost;
-      document.getElementById("threshold").value = s.alert_threshold_ma;
-      document.getElementById("blynk-status").textContent = s.demo_mode
-        ? "DEMO — simulated household + theft events"
-        : s.blynk_token_set
-          ? "Configured (see .env)"
-          : "Not set — DEMO mode";
-      document.getElementById("poll-interval").textContent = s.blynk_poll_interval;
+      const cfg = await res.json();
+      document.getElementById("tariff").value = cfg.tariff_kwh_cost;
+      document.getElementById("threshold").value = cfg.alert_threshold_ma;
+      const currency = cfg.currency || "KES";
+      document.getElementById("currency-label").textContent = currency;
+      document.getElementById("blynk-status").textContent = cfg.token_set
+        ? "Configured in Vercel"
+        : "Not set — optional for /api/blynk/test only";
       const badge = document.getElementById("mode-badge");
-      badge.textContent = s.demo_mode ? "DEMO mode" : "Blynk live";
-      badge.className = s.demo_mode ? "badge" : "badge badge--live";
+      badge.textContent = cfg.token_set ? "Blynk REST configured" : "Webhook ingest only";
+      badge.className = cfg.token_set ? "badge badge--live" : "badge";
     }
 
     document.getElementById("settings-form").addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (AA) AA.setAdminToken(document.getElementById("admin-token").value);
       const body = {
         tariff_kwh_cost: parseFloat(document.getElementById("tariff").value),
         alert_threshold_ma: parseFloat(document.getElementById("threshold").value),
       };
       const res = await fetch("/api/config", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: AA ? AA.adminHeaders({ "Content-Type": "application/json" }) : { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const msg = document.getElementById("save-msg");
-      msg.textContent = res.ok ? "Saved." : "Save failed.";
-      if (res.ok) loadSettings();
+      if (res.ok) {
+        msg.textContent = "Saved.";
+        loadSettings();
+      } else if (res.status === 401) {
+        msg.textContent = "Unauthorized — enter the Admin token above.";
+      } else {
+        msg.textContent = "Save failed.";
+      }
     });
 
     document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
       document.querySelector(".sidebar")?.classList.toggle("open");
     });
-    document.addEventListener("DOMContentLoaded", loadSettings);
+    document.addEventListener("DOMContentLoaded", () => {
+      bindAdminTokenField();
+      loadSettings();
+    });
   </script>
 </body>
 </html>

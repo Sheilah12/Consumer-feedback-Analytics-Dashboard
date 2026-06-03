@@ -62,9 +62,13 @@ def _parse_iso8601(value: Optional[str], name: str) -> Optional[str]:
 def _verify_admin(request: Request) -> None:
     if not settings.admin_token:
         return
-    auth = request.headers.get("Authorization", "")
-    if auth != f"Bearer {settings.admin_token}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    expected = settings.admin_token.strip()
+    header_token = request.headers.get("X-Admin-Token", "").strip()
+    auth = request.headers.get("Authorization", "").strip()
+    bearer = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if header_token == expected or bearer == expected:
+        return
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def _verify_cron(request: Request) -> None:

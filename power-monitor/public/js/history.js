@@ -322,7 +322,7 @@
     powerChart.resize();
   }
 
-  /** Row keys use UTC dates to match SQLite `date(timestamp)` in the API. */
+  /** Row keys use UTC dates to match Postgres `date(ts)` in the API. */
   function last7DayKeys(endDateStr) {
     const [ey, em, ed] = endDateStr.split("-").map(Number);
     const keys = [];

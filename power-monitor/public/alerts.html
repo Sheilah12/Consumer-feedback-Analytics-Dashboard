@@ -55,7 +55,10 @@
       </div>
     </main>
   </div>
+  <script src="/js/admin-auth.js"></script>
   <script>
+    const AA = window.AdminAuth;
+
     async function loadAlerts() {
       const unack = document.getElementById("filter-unack").checked;
       const url = `/api/alerts?limit=100&offset=0${unack ? "&acknowledged=false" : ""}`;
@@ -92,7 +95,14 @@
     document.getElementById("alerts-body").addEventListener("click", async (e) => {
       const btn = e.target.closest("button[data-id]");
       if (!btn) return;
-      await fetch(`/api/alerts/${btn.dataset.id}/ack`, { method: "POST" });
+      const res = await fetch(`/api/alerts/${btn.dataset.id}/ack`, {
+        method: "POST",
+        headers: AA ? AA.adminHeaders() : {},
+      });
+      if (!res.ok && res.status === 401) {
+        alert("Unauthorized — set the Admin token on the Settings page.");
+        return;
+      }
       loadAlerts();
     });
 

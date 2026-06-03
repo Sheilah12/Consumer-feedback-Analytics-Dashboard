@@ -284,20 +284,15 @@ async def api_blynk_webhook_info() -> JSONResponse:
                 "Content-Type": "application/json",
                 "X-Ingest-Secret": "<INGEST_SECRET> (optional alternative to ?secret=)",
             },
-            "body_canonical": {
+            "body_blynk_streams": {
+                "live_current": 4.123,
+                "neutral_current": 4.118,
+                "differential": 0.005,
                 "voltage": 229.4,
-                "current_in": 4.123,
-                "current_out": 4.118,
                 "real_power": 945.2,
                 "energy_kwh_cumulative": 1234.5,
-            },
-            "body_blynk_pins": {
-                "V0": 229.4,
-                "V1": 4.123,
-                "V2": 4.118,
-                "V3": 945.2,
-                "V4": 1234.5,
-                "V5": 0,
+                "system_status": "normal",
+                "ts": "2026-05-30T12:00:00.000Z",
             },
         }
     )

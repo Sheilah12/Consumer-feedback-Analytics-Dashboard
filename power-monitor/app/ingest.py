@@ -11,6 +11,12 @@ import httpx
 from app import db
 from app.config import settings
 from app.models import Reading, ReadingCreate, WebhookPayload
+from app.stream_fields import (
+    differential_to_ma,
+    parse_device_ts,
+    parse_system_status,
+    pick_float,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +57,11 @@ async def fetch_blynk_pins(client: httpx.AsyncClient) -> dict[str, Any]:
 
     return {
         "voltage": v0,
-        "current_in": v1,
-        "current_out": v2,
+        "live_current": v1,
+        "neutral_current": v2,
         "real_power": v3,
         "energy_kwh_cumulative": v4,
-        "hardware_alert": v5 >= 0.5,
+        "system_status": "alert" if v5 >= 0.5 else "normal",
     }
 
 
@@ -89,13 +95,14 @@ async def ingest_snapshot(
     real_power: float,
     energy_kwh_cumulative: float,
     hardware_alert: bool = False,
+    differential_ma: Optional[float] = None,
     ts: Optional[datetime] = None,
 ) -> Reading:
-    """
-    Persist one complete device snapshot. All derived fields are computed server-side.
-    """
+    """Persist one complete device snapshot."""
     ts = ts or _utc_now()
-    differential_ma = abs(current_in - current_out) * 1000.0
+    if differential_ma is None:
+        differential_ma = abs(current_in - current_out) * 1000.0
+
     previous = await db.get_previous_cumulative()
     interval_kwh = _compute_interval(energy_kwh_cumulative, previous)
     alert_triggered = await _should_raise_alert(differential_ma, hardware_alert)
@@ -118,7 +125,7 @@ async def ingest_snapshot(
             f"(threshold {await db.get_alert_threshold_ma():.0f} mA)"
         )
         if hardware_alert:
-            msg += "; hardware alert flag active"
+            msg += "; system_status reported alert"
         await db.insert_alert(differential_ma, msg, ts=ts)
         logger.warning(
             "theft_alert differential_ma=%.1f hardware=%s",
@@ -148,43 +155,63 @@ async def ingest_webhook(payload: WebhookPayload) -> Reading:
         real_power=payload.real_power,
         energy_kwh_cumulative=payload.energy_kwh_cumulative,
         hardware_alert=payload.hardware_alert,
+        differential_ma=payload.differential_ma,
+        ts=payload.ts,
     )
 
 
 async def ingest_webhook_dict(data: dict[str, Any]) -> Reading:
-    """Accept canonical JSON or Blynk virtual-pin keys (V0–V5 / v0–v5)."""
+    """Accept Blynk stream JSON, legacy pin names, or canonical fields."""
     normalized = _normalize_webhook_payload(data)
     payload = WebhookPayload(**normalized)
     return await ingest_webhook(payload)
 
 
-def _pick_float(data: dict[str, Any], *keys: str) -> Optional[float]:
-    for key in keys:
-        for candidate in (key, key.lower(), key.upper()):
-            if candidate in data and data[candidate] not in (None, ""):
-                return float(data[candidate])
-    return None
-
-
 def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
-    """Map Blynk pin payloads or canonical field names to WebhookPayload kwargs."""
-    voltage = _pick_float(data, "voltage", "V0", "v0")
-    current_in = _pick_float(data, "current_in", "V1", "v1")
-    current_out = _pick_float(data, "current_out", "V2", "v2")
-    real_power = _pick_float(data, "real_power", "power", "V3", "v3")
-    cumulative = _pick_float(
-        data, "energy_kwh_cumulative", "energy_kwh", "energy", "V4", "v4"
+    """Map Blynk seven-stream template (and legacy aliases) to WebhookPayload."""
+    live = pick_float(
+        data,
+        "live_current",
+        "current_in",
+        "V1",
+        "v1",
+    )
+    neutral = pick_float(
+        data,
+        "neutral_current",
+        "current_out",
+        "V2",
+        "v2",
+    )
+    voltage = pick_float(data, "voltage", "V0", "v0")
+    real_power = pick_float(data, "real_power", "power", "V3", "v3")
+    cumulative = pick_float(
+        data,
+        "energy_kwh_cumulative",
+        "energy_kwh",
+        "energy",
+        "V4",
+        "v4",
     )
 
-    hardware_raw = data.get("hardware_alert", data.get("V5", data.get("v5", 0)))
-    hardware_alert = bool(float(hardware_raw) >= 0.5) if hardware_raw not in (None, "") else False
+    device_diff = pick_float(data, "differential", "differential_current", "differential_ma")
+    differential_ma: Optional[float] = None
+    if device_diff is not None:
+        differential_ma = differential_to_ma(device_diff)
+    elif live is not None and neutral is not None:
+        differential_ma = abs(live - neutral) * 1000.0
+
+    status_raw = data.get("system_status", data.get("hardware_alert", data.get("V5", data.get("v5"))))
+    hardware_alert = parse_system_status(status_raw)
+
+    ts = parse_device_ts(data)
 
     missing = [
         name
         for name, val in (
+            ("live_current", live),
+            ("neutral_current", neutral),
             ("voltage", voltage),
-            ("current_in", current_in),
-            ("current_out", current_out),
             ("real_power", real_power),
             ("energy_kwh_cumulative", cumulative),
         )
@@ -195,9 +222,11 @@ def _normalize_webhook_payload(data: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "voltage": voltage,
-        "current_in": current_in,
-        "current_out": current_out,
+        "current_in": live,
+        "current_out": neutral,
         "real_power": real_power,
         "energy_kwh_cumulative": cumulative,
         "hardware_alert": hardware_alert,
+        "differential_ma": differential_ma,
+        "ts": ts,
     }

@@ -6,11 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 INGEST_BODY = {
+    "live_current": 5.0,
+    "neutral_current": 4.85,
+    "differential": 0.15,
     "voltage": 230.0,
-    "current_in": 5.0,
-    "current_out": 4.85,
     "real_power": 1050.0,
     "energy_kwh_cumulative": 100.0,
+    "system_status": "alert",
+    "ts": "2026-05-30T12:00:00.000Z",
 }
 
 
@@ -39,7 +42,11 @@ def test_webhook_and_latest(client: TestClient):
     r = client.get("/api/latest")
     assert r.status_code == 200
     data = r.json()
+    assert data["ts"].endswith("Z")
     assert data["timestamp"].endswith("Z")
+    assert data["live_current"] == pytest.approx(5.0, rel=0.01)
+    assert data["neutral_current"] == pytest.approx(4.85, rel=0.01)
+    assert data["system_status"] == "alert"
     assert data["current_in"] == pytest.approx(5.0, rel=0.01)
 
 

@@ -77,15 +77,18 @@
 
     const diffA = Math.abs(currentIn - currentOut);
     const alertTriggered = diffA * 1000 > 150 || hardwareAlert;
+    const ts = now.toISOString();
 
     return {
-      timestamp: now.toISOString(),
+      ts,
+      timestamp: ts,
+      live_current: Math.round(currentIn * 10000) / 10000,
+      neutral_current: Math.round(currentOut * 10000) / 10000,
+      differential: Math.round(diffA * 10000) / 10000,
       voltage: Math.round(voltage * 100) / 100,
-      current_in: Math.round(currentIn * 10000) / 10000,
-      current_out: Math.round(currentOut * 10000) / 10000,
-      differential_current: Math.round(diffA * 10000) / 10000,
       real_power: Math.round(realPower * 10) / 10,
-      energy_kwh: Math.round(demoEnergy * 10000) / 10000,
+      energy_kwh_cumulative: Math.round(demoEnergy * 10000) / 10000,
+      system_status: alertTriggered ? "alert" : "normal",
       alert_triggered: alertTriggered,
       hardware_alert: hardwareAlert,
     };
@@ -105,7 +108,11 @@
       const reading = await fetchLatest();
       if (onReadingCb) onReadingCb(reading);
       dispatch("sensor:reading", reading);
-      if (reading.alert_triggered) {
+      const RF = global.ReadingFields;
+      const isAlert = RF?.isAlertReading
+        ? RF.isAlertReading(reading)
+        : Boolean(reading.alert_triggered);
+      if (isAlert) {
         dispatch("sensor:alert", reading);
       }
     } catch (err) {

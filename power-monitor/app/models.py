@@ -39,6 +39,8 @@ class WebhookPayload(BaseModel):
     real_power: float
     energy_kwh_cumulative: float
     hardware_alert: bool = False
+    differential_ma: Optional[float] = None
+    ts: Optional[datetime] = None
 
 
 class Alert(BaseModel):

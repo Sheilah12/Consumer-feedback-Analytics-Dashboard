@@ -81,13 +81,18 @@ Demo UI without a database: open `/?demo=1` — `poll.js` generates synthetic re
    Content-Type: application/json
 
    {
+     "live_current": 4.123,
+     "neutral_current": 4.118,
+     "differential": 0.005,
      "voltage": 229.4,
-     "current_in": 4.123,
-     "current_out": 4.118,
      "real_power": 945.2,
-     "energy_kwh_cumulative": 1234.5
+     "energy_kwh_cumulative": 1234.5,
+     "system_status": "normal",
+     "ts": "2026-05-30T12:00:00.000Z"
    }
    ```
+
+   Map Blynk data streams 1–7 to these keys (`app/stream_fields.py`). Legacy `V0`–`V5` / `current_in` / `current_out` JSON is still accepted.
 
    Send **all fields in one request** — never one webhook per pin. Normal cadence 30–60 s; immediate POST on alert.
 
@@ -95,7 +100,18 @@ Demo UI without a database: open `/?demo=1` — `poll.js` generates synthetic re
 
 ## Device webhook contract
 
-The server computes `differential_ma`, interval energy, and alert state — **never trust client-supplied differential or interval values**.
+| Blynk stream | JSON field | Notes |
+|--------------|------------|--------|
+| 1 | `live_current` | Live leg current (A) |
+| 2 | `neutral_current` | Neutral leg current (A) |
+| 3 | `differential` | Optional; amperes (server can derive \|live − neutral\|) |
+| 4 | `voltage` | Volts |
+| 5 | `real_power` | Watts |
+| 6 | `energy_kwh_cumulative` | Meter cumulative kWh |
+| 7 | `system_status` | `normal` / `alert` (or legacy `V5`) |
+| — | `ts` | Optional ISO-8601 device timestamp |
+
+Interval energy and sustained alerts are computed server-side from history.
 
 - Interval energy: `max(0, current_cumulative - previous_cumulative)`; if counter resets (reboot), interval = 0.
 - Alert: current differential and the previous `CONSECUTIVE_SAMPLES - 1` readings must all exceed `ALERT_THRESHOLD_MA`.

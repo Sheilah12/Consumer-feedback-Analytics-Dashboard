@@ -127,12 +127,16 @@
 
       <section class="current-strip" aria-label="Line currents">
         <article class="current-strip__card">
-          <span class="current-strip__label">Current In (ACS712)</span>
-          <span class="current-strip__value"><span id="val-current-in">—</span> <span class="current-strip__unit">A</span></span>
+          <span class="current-strip__label">Live Current (ACS712)</span>
+          <span class="current-strip__value"><span id="val-live-current">—</span> <span class="current-strip__unit">A</span></span>
         </article>
         <article class="current-strip__card">
-          <span class="current-strip__label">Current Out (ACS712)</span>
-          <span class="current-strip__value"><span id="val-current-out">—</span> <span class="current-strip__unit">A</span></span>
+          <span class="current-strip__label">Neutral Current (ACS712)</span>
+          <span class="current-strip__value"><span id="val-neutral-current">—</span> <span class="current-strip__unit">A</span></span>
+        </article>
+        <article class="current-strip__card">
+          <span class="current-strip__label">System Status</span>
+          <span class="current-strip__value" id="val-system-status">—</span>
         </article>
       </section>
 
@@ -173,6 +177,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="/js/reading-fields.js"></script>
   <script src="/js/poll.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>

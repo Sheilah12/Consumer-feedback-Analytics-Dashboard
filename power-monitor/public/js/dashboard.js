@@ -1,9 +1,10 @@
 /**
- * Operations dashboard — SSE live stream, KPI cards, Chart.js real-time & daily.
+ * Operations dashboard — polling live stream, KPI cards, Chart.js real-time & daily.
  */
 (function () {
   "use strict";
 
+  const RF = window.ReadingFields || {};
   const MAX_RT_POINTS = 30;
   const DELTA_WINDOW_MS = 5 * 60_000;
   const POLL_MS = 5000;
@@ -14,8 +15,9 @@
     power: document.getElementById("val-power"),
     energy: document.getElementById("val-energy"),
     differential: document.getElementById("val-differential"),
-    currentIn: document.getElementById("val-current-in"),
-    currentOut: document.getElementById("val-current-out"),
+    liveCurrent: document.getElementById("val-live-current"),
+    neutralCurrent: document.getElementById("val-neutral-current"),
+    systemStatus: document.getElementById("val-system-status"),
     deltaVoltage: document.getElementById("delta-voltage"),
     deltaPower: document.getElementById("delta-power"),
     deltaEnergy: document.getElementById("delta-energy"),
@@ -66,27 +68,29 @@
       }
     }
     if (r.data && r.data.voltage !== undefined) r = r.data;
-    if (r.voltage === undefined && r.real_power === undefined) return null;
+    if (!RF.hasReadingData || !RF.hasReadingData(r)) {
+      if (r.voltage === undefined && r.real_power === undefined) return null;
+    }
     return r;
   }
 
-  /** API returns differential in Amperes (4 dp). */
   function diffAmps(r) {
-    return Number(r.differential_current) || 0;
+    return RF.differentialA ? RF.differentialA(r) : Number(r.differential_current) || 0;
   }
 
   function diffMa(r) {
-    return diffAmps(r) * 1000;
+    return RF.differentialMa ? RF.differentialMa(r) : diffAmps(r) * 1000;
   }
 
   function pushHistory(r) {
-    const t = new Date(r.timestamp).getTime();
+    const ts = RF.readingTs ? RF.readingTs(r) : r.timestamp;
+    const t = new Date(ts).getTime();
     if (Number.isNaN(t)) return;
     history.push({
       t,
       voltage: Number(r.voltage),
       power: Number(r.real_power),
-      energy: Number(r.energy_kwh),
+      energy: RF.energyKwh ? RF.energyKwh(r) : Number(r.energy_kwh),
       diffA: diffAmps(r),
     });
     const cutoff = Date.now() - DELTA_WINDOW_MS - 5000;
@@ -170,17 +174,19 @@
 
   function showAlertBanner(r) {
     if (!els.alertBanner) return;
-    const on = Boolean(r.alert_triggered);
+    const on = RF.isAlertReading ? RF.isAlertReading(r) : Boolean(r.alert_triggered);
     els.alertBanner.classList.toggle("is-visible", on);
     if (on && els.alertDetail) {
-      els.alertDetail.textContent = ` · ${diffMa(r).toFixed(0)} mA differential at ${new Date(r.timestamp).toLocaleString()}`;
+      const ts = RF.readingTs ? RF.readingTs(r) : r.timestamp;
+      els.alertDetail.textContent = ` · ${diffMa(r).toFixed(0)} mA differential at ${new Date(ts).toLocaleString()}`;
     }
     setSystemStatus(on);
   }
 
   function pushRealtimeChart(r, skipUpdate) {
     if (!realtimeChart) return;
-    const label = formatClock(r.timestamp);
+    const ts = RF.readingTs ? RF.readingTs(r) : r.timestamp;
+    const label = formatClock(ts);
     const power = Number(r.real_power) || 0;
     const ma = diffMa(r);
 
@@ -205,14 +211,28 @@
     if (!r) return;
 
     pushHistory(r);
-    lastReadingTs = r.timestamp;
+    lastReadingTs = RF.readingTs ? RF.readingTs(r) : r.timestamp;
 
     if (els.voltage) els.voltage.textContent = Number(r.voltage).toFixed(1);
     if (els.power) els.power.textContent = Number(r.real_power).toFixed(1);
-    if (els.energy) els.energy.textContent = Number(r.energy_kwh).toFixed(4);
+    if (els.energy) {
+      const e = RF.energyKwh ? RF.energyKwh(r) : Number(r.energy_kwh);
+      els.energy.textContent = e.toFixed(4);
+    }
     if (els.differential) els.differential.textContent = diffAmps(r).toFixed(4);
-    if (els.currentIn) els.currentIn.textContent = Number(r.current_in).toFixed(4);
-    if (els.currentOut) els.currentOut.textContent = Number(r.current_out).toFixed(4);
+    if (els.liveCurrent) {
+      const a = RF.liveCurrent ? RF.liveCurrent(r) : Number(r.current_in);
+      els.liveCurrent.textContent = a.toFixed(4);
+    }
+    if (els.neutralCurrent) {
+      const a = RF.neutralCurrent ? RF.neutralCurrent(r) : Number(r.current_out);
+      els.neutralCurrent.textContent = a.toFixed(4);
+    }
+    if (els.systemStatus) {
+      const st = RF.systemStatus ? RF.systemStatus(r) : (r.alert_triggered ? "alert" : "normal");
+      els.systemStatus.textContent = st.toUpperCase();
+      els.systemStatus.classList.toggle("current-strip__value--alert", st === "alert");
+    }
 
     const snap = history[history.length - 1];
     if (snap) {

@@ -4,6 +4,7 @@
 (function () {
   "use strict";
 
+  const RF = window.ReadingFields || {};
   const ROWS_PER_PAGE = 25;
   const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -83,8 +84,7 @@
   }
 
   function diffMa(r) {
-    const d = Number(r.differential_current) || 0;
-    return d * 1000;
+    return RF.differentialMa ? RF.differentialMa(r) : (Number(r.differential_current) || 0) * 1000;
   }
 
   function formatTs(iso) {
@@ -122,7 +122,8 @@
     if (!res.ok) throw new Error("readings fetch failed");
     const body = await res.json();
     const items = body.items || body;
-    return items.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const tsOf = (r) => new Date(RF.readingTs ? RF.readingTs(r) : r.timestamp).getTime();
+    return items.slice().sort((a, b) => tsOf(a) - tsOf(b));
   }
 
   async function fetchHourly(from, to) {
@@ -543,18 +544,23 @@
     } else {
       els.tbody.innerHTML = slice
         .map((r) => {
-          const alert = r.alert_triggered;
-          const pill = alert
-            ? '<span class="pill pill--alert">Alert</span>'
-            : '<span class="pill pill--ok">Normal</span>';
+          const st = RF.systemStatus ? RF.systemStatus(r) : (r.alert_triggered ? "alert" : "normal");
+          const pill =
+            st === "alert"
+              ? '<span class="pill pill--alert">Alert</span>'
+              : '<span class="pill pill--ok">Normal</span>';
+          const ts = RF.readingTs ? RF.readingTs(r) : r.timestamp;
+          const live = RF.liveCurrent ? RF.liveCurrent(r) : Number(r.current_in);
+          const neutral = RF.neutralCurrent ? RF.neutralCurrent(r) : Number(r.current_out);
+          const energy = RF.energyKwh ? RF.energyKwh(r) : Number(r.energy_kwh);
           return `<tr>
-            <td>${formatTs(r.timestamp)}</td>
+            <td>${formatTs(ts)}</td>
             <td>${Number(r.voltage).toFixed(2)}</td>
-            <td>${Number(r.current_in).toFixed(4)}</td>
-            <td>${Number(r.current_out).toFixed(4)}</td>
+            <td>${live.toFixed(4)}</td>
+            <td>${neutral.toFixed(4)}</td>
             <td>${diffMa(r).toFixed(1)}</td>
             <td>${Number(r.real_power).toFixed(1)}</td>
-            <td>${Number(r.energy_kwh).toFixed(4)}</td>
+            <td>${energy.toFixed(4)}</td>
             <td>${pill}</td>
           </tr>`;
         })
@@ -571,27 +577,32 @@
   function exportCsv() {
     if (!allReadings.length) return;
     const header = [
-      "timestamp",
+      "ts",
       "voltage_v",
-      "current_in_a",
-      "current_out_a",
+      "live_current_a",
+      "neutral_current_a",
       "differential_ma",
       "real_power_w",
-      "energy_kwh",
-      "alert_triggered",
+      "energy_kwh_cumulative",
+      "system_status",
     ];
-    const rows = allReadings.map((r) =>
-      [
-        r.timestamp,
+    const rows = allReadings.map((r) => {
+      const ts = RF.readingTs ? RF.readingTs(r) : r.timestamp;
+      const live = RF.liveCurrent ? RF.liveCurrent(r) : r.current_in;
+      const neutral = RF.neutralCurrent ? RF.neutralCurrent(r) : r.current_out;
+      const energy = RF.energyKwh ? RF.energyKwh(r) : r.energy_kwh;
+      const st = RF.systemStatus ? RF.systemStatus(r) : r.alert_triggered ? "alert" : "normal";
+      return [
+        ts,
         r.voltage,
-        r.current_in,
-        r.current_out,
+        live,
+        neutral,
         diffMa(r).toFixed(2),
         r.real_power,
-        r.energy_kwh,
-        r.alert_triggered ? "1" : "0",
-      ].join(",")
-    );
+        energy,
+        st,
+      ].join(",");
+    });
     const csv = [header.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

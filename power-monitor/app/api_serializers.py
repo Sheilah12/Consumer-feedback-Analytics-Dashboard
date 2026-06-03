@@ -1,4 +1,4 @@
-"""Map internal models to REST JSON contracts (UTC ISO, A, KES)."""
+"""Map internal models to REST JSON contracts (Blynk stream names + legacy aliases)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.models import Alert, Reading
+from app.stream_fields import system_status_label
 
 
 def _iso_utc(dt: datetime) -> str:
@@ -20,46 +21,54 @@ def _round4(value: float) -> float:
     return round(float(value), 4)
 
 
-def _round2_kes(value: float) -> float:
-    return round(float(value), 2)
-
-
 def reading_to_api(row: Reading | dict[str, Any]) -> dict[str, Any]:
-    """API reading: currents in A (4 dp), differential in A, energy 4 dp, UTC timestamp."""
+    """Primary keys match Blynk streams; legacy keys kept for older clients."""
     if isinstance(row, Reading):
         ts = row.timestamp
         voltage = row.voltage
-        current_in = row.current_in
-        current_out = row.current_out
+        live = row.current_in
+        neutral = row.current_out
         diff_ma = row.differential_current
         real_power = row.real_power
-        energy_kwh = row.energy_kwh
+        energy = row.energy_kwh
         alert_triggered = row.alert_triggered
         hardware_alert = row.hardware_alert
     else:
-        ts = row["timestamp"]
+        ts = row.get("ts") or row["timestamp"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         voltage = row["voltage"]
-        current_in = row["current_in"]
-        current_out = row["current_out"]
-        diff_ma = row["differential_current"]
+        live = row.get("live_current", row["current_in"])
+        neutral = row.get("neutral_current", row["current_out"])
+        diff_ma = row.get("differential_ma", row["differential_current"])
+        if diff_ma is not None and diff_ma < 5:
+            diff_ma = float(diff_ma) * 1000.0
         real_power = row["real_power"]
-        energy_kwh = row["energy_kwh"]
+        energy = row.get("energy_kwh_cumulative", row["energy_kwh"])
         alert_triggered = bool(row.get("alert_triggered", 0))
         hardware_alert = bool(row.get("hardware_alert", False))
 
-    diff_a = diff_ma / 1000.0
+    diff_a = float(diff_ma) / 1000.0
+    ts_iso = _iso_utc(ts)
+    status = system_status_label(alert_triggered, hardware_alert)
 
     return {
-        "timestamp": _iso_utc(ts),
+        "ts": ts_iso,
+        "timestamp": ts_iso,
+        "live_current": _round4(live),
+        "neutral_current": _round4(neutral),
+        "differential": _round4(diff_a),
         "voltage": _round4(voltage),
-        "current_in": _round4(current_in),
-        "current_out": _round4(current_out),
-        "differential_current": _round4(diff_a),
         "real_power": _round4(real_power),
-        "energy_kwh": _round4(energy_kwh),
+        "energy_kwh_cumulative": _round4(energy),
+        "system_status": status,
         "alert_triggered": alert_triggered,
+        # Legacy aliases
+        "current_in": _round4(live),
+        "current_out": _round4(neutral),
+        "differential_current": _round4(diff_a),
+        "differential_ma": round(float(diff_ma), 2),
+        "energy_kwh": _round4(energy),
         "hardware_alert": hardware_alert,
     }
 
@@ -67,9 +76,12 @@ def reading_to_api(row: Reading | dict[str, Any]) -> dict[str, Any]:
 def alert_to_api(alert: Alert) -> dict[str, Any]:
     return {
         "id": alert.id,
+        "ts": _iso_utc(alert.timestamp),
         "timestamp": _iso_utc(alert.timestamp),
+        "differential": _round4(alert.differential_ma / 1000.0),
         "differential_ma": round(alert.differential_ma, 2),
         "differential_current": _round4(alert.differential_ma / 1000.0),
         "message": alert.message,
         "acknowledged": alert.acknowledged,
+        "system_status": "alert",
     }

@@ -35,6 +35,29 @@ def test_normalize_blynk_pin_payload():
     assert out["energy_kwh_cumulative"] == 12.5
 
 
+@pytest.mark.unit
+def test_normalize_blynk_stream_payload():
+    from app.ingest import _normalize_webhook_payload
+
+    out = _normalize_webhook_payload(
+        {
+            "live_current": 4.123,
+            "neutral_current": 4.118,
+            "differential": 0.005,
+            "voltage": 229.4,
+            "real_power": 945.2,
+            "energy_kwh_cumulative": 1234.5,
+            "system_status": "normal",
+            "ts": "2026-05-30T12:00:00.000Z",
+        }
+    )
+    assert out["current_in"] == pytest.approx(4.123)
+    assert out["current_out"] == pytest.approx(4.118)
+    assert out["differential_ma"] == pytest.approx(5.0, rel=0.01)
+    assert out["hardware_alert"] is False
+    assert out["ts"] is not None
+
+
 @pytest.mark.asyncio
 async def test_ingest_snapshot():
     reading = await ingest.ingest_snapshot(

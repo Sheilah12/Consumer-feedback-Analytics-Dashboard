@@ -126,6 +126,28 @@ def test_stats_summary(client: TestClient):
         assert key in r.json()
 
 
+def test_budget_cap_endpoint(client: TestClient):
+    _seed(client)
+    r = client.get("/api/budget/cap")
+    assert r.status_code == 200
+    data = r.json()
+    for key in (
+        "month_to_date_kwh",
+        "month_to_date_cost",
+        "monthly_budget_kes",
+        "pct_used",
+        "projected_month_cost",
+        "on_track",
+    ):
+        assert key in data
+
+
+def test_config_monthly_budget(client: TestClient):
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    assert "monthly_budget_kes" in r.json()
+
+
 def test_budget_estimate(client: TestClient):
     _seed(client)
     r = client.get("/api/budget/estimate", params={"hours": 24, "cap_kwh": 100})

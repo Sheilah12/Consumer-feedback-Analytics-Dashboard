@@ -13,8 +13,10 @@ from fastapi.responses import JSONResponse
 from app import db, ingest
 from app.api_serializers import alert_to_api, reading_to_api
 from app.config import settings
+from app.budget_cap import compute_budget_cap
 from app.models import (
     AlertAck,
+    BudgetCapResponse,
     BudgetEstimate,
     ConfigResponse,
     ConfigUpdate,
@@ -116,6 +118,7 @@ async def _config_response() -> ConfigResponse:
         alert_threshold_ma=await db.get_alert_threshold_ma(),
         isolation_threshold_ma=await db.get_isolation_threshold_ma(),
         tariff_kwh_cost=round(await db.get_tariff(), 2),
+        monthly_budget_kes=round(await db.get_monthly_budget_kes(), 2),
         currency=settings.currency,
         token_set=bool(token or stored_token),
     )
@@ -253,6 +256,8 @@ async def api_config_update(body: ConfigUpdate, request: Request) -> JSONRespons
         await db.set_setting("alert_threshold_ma", str(body.alert_threshold_ma))
     if body.isolation_threshold_ma is not None:
         await db.set_setting("isolation_threshold_ma", str(body.isolation_threshold_ma))
+    if body.monthly_budget_kes is not None:
+        await db.set_setting("monthly_budget_kes", str(body.monthly_budget_kes))
     return _no_cache((await _config_response()).model_dump())
 
 
@@ -416,6 +421,21 @@ async def legacy_settings_put(body: SettingsUpdate, request: Request) -> JSONRes
 @app.post("/api/alerts/{alert_id}/acknowledge", response_model=AlertAck)
 async def legacy_alert_ack(alert_id: int, request: Request) -> JSONResponse:
     return await api_alert_ack(alert_id, request)
+
+
+@app.get("/api/budget/cap", response_model=BudgetCapResponse)
+async def api_budget_cap() -> JSONResponse:
+    now = datetime.now(timezone.utc)
+    month_kwh = await db.get_month_to_date_kwh()
+    tariff = await db.get_tariff()
+    budget = await db.get_monthly_budget_kes()
+    body = compute_budget_cap(
+        now=now,
+        month_to_date_kwh=month_kwh,
+        tariff_kwh_cost=tariff,
+        monthly_budget_kes=budget,
+    )
+    return _cached(BudgetCapResponse(**body).model_dump(), max_age=30)
 
 
 @app.get("/api/budget/estimate", response_model=BudgetEstimate)

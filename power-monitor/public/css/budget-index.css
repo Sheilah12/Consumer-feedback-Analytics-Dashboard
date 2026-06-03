@@ -1,0 +1,162 @@
+/* Budget page — monthly cap gauge and chart */
+
+.bud-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.25rem;
+}
+
+.bud-toolbar .form-group {
+  margin: 0;
+  min-width: 200px;
+}
+
+.bud-hero {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .bud-hero {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+.bud-gauge {
+  position: relative;
+  width: 180px;
+  height: 180px;
+}
+
+.bud-gauge__ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--bud-gauge-color, #2ecc71) 0 calc(var(--bud-pct, 0) * 1%),
+    var(--color-navy-800) calc(var(--bud-pct, 0) * 1%) 100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.bud-gauge__ring::before {
+  content: "";
+  width: 72%;
+  height: 72%;
+  border-radius: 50%;
+  background: var(--color-navy-900);
+  border: 1px solid var(--color-navy-800);
+}
+
+.bud-gauge__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bud-gauge__pct {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-white);
+  line-height: 1;
+}
+
+.bud-gauge__label {
+  font-size: 0.72rem;
+  color: var(--color-slate-400);
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bud-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.bud-stat {
+  background: var(--color-navy-900);
+  border: 1px solid var(--color-navy-800);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.85rem;
+}
+
+.bud-stat__value {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.bud-stat__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-slate-400);
+  margin-top: 0.25rem;
+}
+
+.bud-chart-panel {
+  background: var(--color-navy-900);
+  border: 1px solid var(--color-navy-800);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.bud-chart-panel__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.bud-chart-wrap {
+  position: relative;
+  height: 260px;
+}
+
+.bud-estimator {
+  background: var(--color-navy-900);
+  border: 1px solid var(--color-navy-800);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.bud-estimator__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  align-items: end;
+}
+
+.bud-estimator__result {
+  margin-top: 0.85rem;
+  font-family: var(--font-mono);
+  color: var(--color-slate-200);
+}
+
+.badge--pace-ok {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+
+.badge--pace-bad {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+}

@@ -8,7 +8,6 @@
   const MAX_RT_POINTS = 30;
   const DELTA_WINDOW_MS = 5 * 60_000;
   const POLL_MS = 5000;
-  const BUDGET_LS_KEY = "power_monitor_daily_budget_kwh";
 
   const els = {
     voltage: document.getElementById("val-voltage"),
@@ -350,9 +349,6 @@
     }
 
     const { labels, values } = buildLast7Days(days);
-    const budgetRaw = localStorage.getItem(BUDGET_LS_KEY);
-    const budget = parseFloat(budgetRaw, 10);
-    const hasBudget = Number.isFinite(budget) && budget > 0;
 
     if (dailyChart) {
       dailyChart.destroy();
@@ -370,20 +366,6 @@
         order: 2,
       },
     ];
-
-    if (hasBudget) {
-      datasets.push({
-        type: "line",
-        label: "Daily budget",
-        data: labels.map(() => budget),
-        borderColor: palette.amber,
-        borderDash: [8, 4],
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: false,
-        order: 1,
-      });
-    }
 
     dailyChart = new Chart(ctx, {
       type: "bar",

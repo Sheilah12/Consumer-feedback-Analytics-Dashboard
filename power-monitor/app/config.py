@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     isolation_threshold_ma: float = 300.0
     consecutive_samples: int = 2
     tariff_kwh_cost: float = 25.0
+    monthly_budget_kes: float = 3000.0
     currency: str = "KES"
     retention_days: int = 30
 

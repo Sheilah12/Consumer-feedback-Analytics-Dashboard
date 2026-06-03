@@ -110,12 +110,14 @@ class ConfigUpdate(BaseModel):
     alert_threshold_ma: Optional[float] = Field(None, ge=0)
     isolation_threshold_ma: Optional[float] = Field(None, ge=0)
     tariff_kwh_cost: Optional[float] = Field(None, ge=0)
+    monthly_budget_kes: Optional[float] = Field(None, ge=0)
 
 
 class ConfigResponse(BaseModel):
     alert_threshold_ma: float
     isolation_threshold_ma: float
     tariff_kwh_cost: float
+    monthly_budget_kes: float
     currency: str = "KES"
     token_set: bool = False
 
@@ -151,4 +153,22 @@ class BudgetEstimate(BaseModel):
     cap_kwh: Optional[float] = None
     cap_cost_kes: Optional[float] = None
     over_cap: bool = False
+    currency: str = "KES"
+
+
+class BudgetCapResponse(BaseModel):
+    month_to_date_kwh: float
+    month_to_date_cost: float
+    monthly_budget_kes: float
+    tariff_kwh_cost: float
+    pct_used: float
+    days_elapsed: int
+    days_in_month: int
+    days_remaining: int
+    projected_month_cost: float
+    remaining_kes: float
+    daily_allowance_remaining: float
+    on_track: bool
+    projected_overage: float
+    est_exhaustion_date: Optional[str] = None
     currency: str = "KES"

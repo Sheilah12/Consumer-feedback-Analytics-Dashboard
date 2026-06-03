@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/sidebar.css" />
   <link rel="stylesheet" href="/css/dashboard.css" />
+  <link rel="stylesheet" href="/css/budget-index.css" />
 </head>
 <body>
   <button type="button" class="mobile-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
@@ -15,7 +16,7 @@
     <aside class="sidebar">
       <div class="sidebar__brand">
         <div class="sidebar__brand-title">Power<span>Monitor</span></div>
-        <div class="sidebar__brand-sub">Energy &amp; Theft Detection</div>
+        <div class="sidebar__brand-sub">Consumer energy analytics</div>
       </div>
       <nav class="sidebar__nav">
         <a href="/"><span class="sidebar__nav-icon">◉</span> Dashboard</a>
@@ -24,51 +25,94 @@
         <a href="/detection"><span class="sidebar__nav-icon">⚡</span> Detection</a>
         <a href="/settings"><span class="sidebar__nav-icon">⚙</span> Settings</a>
       </nav>
-      <div class="sidebar__footer">Tariff from settings</div>
+      <div class="sidebar__footer">Monthly usage cap · KES</div>
     </aside>
     <main class="main-content">
       <header class="page-header">
         <div>
-          <h1>Budget &amp; Cost Estimator</h1>
-          <p class="subtitle">Project consumption cost against an optional kWh cap</p>
+          <h1>Monthly Usage Cap</h1>
+          <p class="subtitle">Dynamic financial limit with run-rate projection for the current calendar month</p>
         </div>
-        <span class="badge" id="budget-status">—</span>
+        <span class="badge" id="budget-status-pill">—</span>
       </header>
 
-      <div class="toolbar">
-        <div class="form-group" style="margin:0">
-          <label for="budget-hours">Billing period (hours)</label>
-          <select id="budget-hours">
-            <option value="24" selected>24</option>
-            <option value="168">168 (7 days)</option>
-            <option value="720">720 (30 days)</option>
-          </select>
+      <div class="bud-toolbar">
+        <div class="form-group">
+          <label for="monthly-budget">Monthly limit (KES)</label>
+          <input type="number" id="monthly-budget" min="0" step="1" placeholder="e.g. 3000" />
         </div>
-        <div class="form-group" style="margin:0">
-          <label for="budget-cap">Cap (kWh, optional)</label>
-          <input type="number" id="budget-cap" min="0" step="0.1" placeholder="e.g. 50" />
-        </div>
-        <button type="button" class="btn btn--primary" id="budget-refresh">Recalculate</button>
+        <button type="button" class="btn btn--primary" id="budget-save">Save limit</button>
+        <button type="button" class="btn" id="budget-refresh">Refresh</button>
+        <p class="subtitle" style="margin:0;align-self:center">Tariff: <span id="budget-tariff" class="mono">—</span></p>
       </div>
 
-      <p class="subtitle">Tariff: <span id="budget-tariff" class="mono">—</span></p>
+      <section class="bud-hero">
+        <div class="bud-gauge" aria-label="Monthly budget used">
+          <div class="bud-gauge__ring" id="cap-gauge-ring"></div>
+          <div class="bud-gauge__center">
+            <span class="bud-gauge__pct" id="cap-pct">—</span>
+            <span class="bud-gauge__label">budget used</span>
+          </div>
+        </div>
+        <div class="bud-stats">
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-spent">—</div>
+            <div class="bud-stat__label">Spent this month</div>
+          </div>
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-projected">—</div>
+            <div class="bud-stat__label">Projected month-end</div>
+          </div>
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-remaining">—</div>
+            <div class="bud-stat__label">Remaining</div>
+          </div>
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-daily-allow">—</div>
+            <div class="bud-stat__label">Daily allowance left</div>
+          </div>
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-exhaustion">—</div>
+            <div class="bud-stat__label">Est. cap exhaustion</div>
+          </div>
+          <div class="bud-stat">
+            <div class="bud-stat__value" id="stat-kwh">—</div>
+            <div class="bud-stat__label">Month kWh to date</div>
+          </div>
+        </div>
+      </section>
 
-      <section class="budget-summary">
-        <div class="budget-card">
-          <div class="budget-card__value" id="budget-energy">—</div>
-          <div class="budget-card__label">Energy (kWh)</div>
+      <section class="bud-chart-panel">
+        <div class="bud-chart-panel__title">Cumulative spend — actual vs budget pace vs projection</div>
+        <div class="bud-chart-wrap">
+          <canvas id="chart-monthly-cap" aria-label="Monthly cumulative cost chart"></canvas>
         </div>
-        <div class="budget-card">
-          <div class="budget-card__value" id="budget-cost">—</div>
-          <div class="budget-card__label">Estimated cost</div>
+      </section>
+
+      <section class="bud-estimator">
+        <div class="bud-chart-panel__title">Appliance cost estimator</div>
+        <p class="subtitle">Estimate monthly cost for a load at the current tariff</p>
+        <div class="bud-estimator__grid">
+          <div class="form-group" style="margin:0">
+            <label for="est-watts">Power (W)</label>
+            <input type="number" id="est-watts" min="0" step="10" value="1500" />
+          </div>
+          <div class="form-group" style="margin:0">
+            <label for="est-hours">Hours / day</label>
+            <input type="number" id="est-hours" min="0" step="0.5" value="4" />
+          </div>
+          <div class="form-group" style="margin:0">
+            <label for="est-days">Days / month</label>
+            <input type="number" id="est-days" min="1" max="31" step="1" value="30" />
+          </div>
+          <button type="button" class="btn" id="est-calc">Estimate</button>
         </div>
-        <div class="budget-card">
-          <div class="budget-card__value" id="budget-cap-cost">—</div>
-          <div class="budget-card__label">Cap cost at tariff</div>
-        </div>
+        <p class="bud-estimator__result" id="est-result">—</p>
       </section>
     </main>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="/js/admin-auth.js"></script>
   <script src="/js/budget.js"></script>
 </body>
 </html>

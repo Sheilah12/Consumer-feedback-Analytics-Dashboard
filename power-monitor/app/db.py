@@ -98,6 +98,7 @@ async def ensure_schema() -> None:
             "tariff_kwh_cost": str(settings.tariff_kwh_cost),
             "alert_threshold_ma": str(settings.alert_threshold_ma),
             "isolation_threshold_ma": str(settings.isolation_threshold_ma),
+            "monthly_budget_kes": str(settings.monthly_budget_kes),
         }
         for key, value in defaults.items():
             await conn.execute(
@@ -140,6 +141,43 @@ async def get_alert_threshold_ma() -> float:
 async def get_isolation_threshold_ma() -> float:
     raw = await get_setting("isolation_threshold_ma", str(settings.isolation_threshold_ma))
     return float(raw)
+
+
+async def get_monthly_budget_kes() -> float:
+    raw = await get_setting("monthly_budget_kes", str(settings.monthly_budget_kes))
+    return float(raw)
+
+
+async def get_month_to_date_kwh() -> float:
+    async with connect() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT COALESCE(SUM(energy_kwh_interval), 0) AS kwh
+            FROM readings
+            WHERE ts >= date_trunc('month', now())
+            """
+        )
+    return float(row["kwh"] if row else 0.0)
+
+
+async def get_month_daily_energy() -> list[dict[str, Any]]:
+    """Daily kWh totals for the current UTC calendar month."""
+    async with connect() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                (ts AT TIME ZONE 'UTC')::date AS day,
+                COALESCE(SUM(energy_kwh_interval), 0) AS energy_kwh
+            FROM readings
+            WHERE ts >= date_trunc('month', now())
+            GROUP BY 1
+            ORDER BY day ASC
+            """
+        )
+    return [
+        {"day": row["day"].isoformat(), "energy_kwh": round(float(row["energy_kwh"]), 4)}
+        for row in rows
+    ]
 
 
 async def get_latest_system_status() -> Optional[str]:
